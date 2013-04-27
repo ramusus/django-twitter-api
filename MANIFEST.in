@@ -1,0 +1,6 @@
+include README.md
+include LICENSE
+include MANIFEST.in
+include quicktest.py
+include settings_test.py
+recursive-include twitter_api *

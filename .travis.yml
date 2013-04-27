@@ -1,0 +1,19 @@
+language: python
+python:
+  - "2.7"
+env:
+  - DJANGO=1.4
+install:
+  - pip install -q Django>=$DJANGO --use-mirrors
+  - pip install -q coveralls --use-mirrors
+  - pip install -q . --use-mirrors
+script:
+  - coverage run --source=twitter_api quicktest.py twitter_api
+after_success:
+  - coveralls
+notifications:
+  email:
+    recipients:
+      - ramusus@gmail.com
+    on_success: change
+    on_failure: change
