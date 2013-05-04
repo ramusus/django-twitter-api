@@ -34,8 +34,10 @@ def get_api():
 #            update_token()
 #            tokens = get_tokens()
 #        token = tokens[0].access_token
-    auth = tweepy.OAuthHandler('','')
-    auth.access_token = tweepy.oauth.OAuthToken('XZZUHc6dRo29RiiNrJB81GbUrpJUjSkBdUoRFU762p4', '14379302-7JvEkhgKhHndk2juljvIJuvwjQKWpzYVUruyZIi6u')
+    auth = tweepy.OAuthHandler(settings.OAUTH_TOKENS_TWITTER_CLIENT_ID, settings.OAUTH_TOKENS_TWITTER_CLIENT_SECRET)
+    auth.username = 'ramusus'
+    auth.access_token = tweepy.oauth.OAuthToken('14379302-7JvEkhgKhHndk2juljvIJuvwjQKWpzYVUruyZIi6u', 'XZZUHc6dRo29RiiNrJB81GbUrpJUjSkBdUoRFU762p4')
+    auth.request_token = tweepy.oauth.OAuthToken('Tj2LLUw2ceLh3WM3aqrZiAp4IzLCz4XcaBRAvkmsXw', 'QnhkWWxKZq1WpC7AMr3RfvAjJNDwCnMje8BbVQamd0')
     return tweepy.API(auth)
 
 def api(method, *args, **kwargs):

@@ -4,23 +4,31 @@ from django.db.models.fields import FieldDoesNotExist
 from django.db.models.related import RelatedObject
 from django.utils.translation import ugettext as _
 from utils import api
+from decorators import fetch_all
+from datetime import datetime
+import tweepy
 import fields
 import dateutil.parser
 import logging
 import re
 
+__all__ = ['User', 'Status', 'TwitterModel', 'TwitterContentError', 'TwitterManager']
+
 log = logging.getLogger('twitter_api')
+
+class TwitterContentError(Exception):
+    pass
 
 class TwitterManager(models.Manager):
     '''
     Twitter Manager for RESTful CRUD operations
     '''
-    def __init__(self, remote_pk=None, resource_path='%s', *args, **kwargs):
-        if '%s' not in resource_path:
-            raise ValueError('Argument resource_path must contains %s character')
+    def __init__(self, methods=None, remote_pk=None, *args, **kwargs):
+        if methods and len(methods.items()) < 1:
+            raise ValueError('Argument methods must contains at least 1 specified method')
 
-        self.resource_path = resource_path
-        self.remote_pk = remote_pk or ('graph_id',)
+        self.methods = methods or {}
+        self.remote_pk = remote_pk or ('id',)
         if not isinstance(self.remote_pk, tuple):
             self.remote_pk = (self.remote_pk,)
 
@@ -30,9 +38,9 @@ class TwitterManager(models.Manager):
         '''
         Return object by url
         '''
-        m = re.findall(r'(?:https?://)?(?:www\.)?facebook\.com/(.+)/?', url)
+        m = re.findall(r'(?:https?://)?(?:www\.)?twitter\.com/(.+)/?', url)
         if not len(m):
-            raise ValueError("Url should be started with http://facebook.com/")
+            raise ValueError("Url should be started with https://twitter.com/")
 
         return self.get_by_slug(m[0])
 
@@ -58,27 +66,100 @@ class TwitterManager(models.Manager):
 
         return instance
 
-    def get_or_create_from_resource(self, resource):
+#    def get_or_create_from_resource(self, resource):
+#
+#        instance = self.model()
+#        instance.parse(dict(resource))
+#
+#        return self.get_or_create_from_instance(instance)
 
-        instance = self.model()
-        instance.parse(dict(resource))
-
-        return self.get_or_create_from_instance(instance)
+    def api_call(self, *args, **kwargs):
+        method = kwargs.pop('method')
+        return api(self.methods[method], *args, **kwargs)
 
     def fetch(self, *args, **kwargs):
         '''
         Retrieve and save object to local DB
         '''
-        response = graph(self.resource_path % args[0], **kwargs)
-        instance = self.get_or_create_from_resource(response.toDict())
+        result = self.get(*args, **kwargs)
+        if isinstance(result, list):
+            return [self.get_or_create_from_instance(instance) for instance in result]
+        else:
+            return self.get_or_create_from_instance(result)
+
+    def get(self, *args, **kwargs):
+        '''
+        Retrieve objects from remote server
+        '''
+        extra_fields = kwargs.pop('extra_fields', {})
+        extra_fields['fetched'] = datetime.now()
+        response = self.api_call(method='get', *args, **kwargs)
+
+        return self.parse_response(response, extra_fields)
+
+    def parse_response(self, response, extra_fields=None):
+        if isinstance(response, (list, tuple)):
+            return self.parse_response_list(response, extra_fields)
+        elif isinstance(response, tweepy.models.Model):
+            return self.parse_response_object(response, extra_fields)
+        else:
+            raise TwitterContentError('Twitter response should be list or dict, not %s' % response)
+
+    def parse_response_object(self, resource, extra_fields=None):
+
+        instance = self.model()
+        # important to do it before calling parse method
+        if extra_fields:
+            instance.__dict__.update(extra_fields)
+        instance.set_tweepy(resource)
+        instance.parse()
 
         return instance
+
+    def parse_response_list(self, response_list, extra_fields=None):
+
+        instances = []
+        for response in response_list:
+
+            if not isinstance(response, tweepy.models.Model):
+                log.error("Resource %s is not dictionary" % response)
+                continue
+
+            instance = self.parse_response_object(response, extra_fields)
+            instances += [instance]
+
+        return instances
+
+class UserTwitterManager(TwitterManager):
+
+    def fetch_followers_for_user(self, user, all=False, count=20, **kwargs):
+        # https://dev.twitter.com/docs/api/1.1/get/followers/ids
+        # https://dev.twitter.com/docs/api/1.1/get/followers/list
+        if all:
+            # TODO: make optimization: break cursor iteration after getting already existing user and switch to ids REST method
+            user.followers.clear()
+            cursor = tweepy.Cursor(user.tweepy._api.followers, id=user.id, count=200)
+            for instance in cursor.items():
+                instance = self.parse_response_object(instance)
+                instance = self.get_or_create_from_instance(instance)
+                user.followers.add(instance)
+        else:
+            raise NotImplementedError("Now implemented only with argument all=True")
+        return user.followers.all()
+
+class StatusTwitterManager(TwitterManager):
+
+    @fetch_all(max_count=200)
+    def fetch_for_user(self, user, count=20, **kwargs):
+        # https://dev.twitter.com/docs/api/1.1/get/statuses/user_timeline
+        instances = user.tweepy.timeline(count=count, **kwargs)
+        instances = self.parse_response_list(instances, {'user_id': user.id})
+        instances = [self.get_or_create_from_instance(instance) for instance in instances]
+        return instances
 
 class TwitterModel(models.Model):
     class Meta:
         abstract = True
-
-    remote_pk_field = 'id'
 
     objects = models.Manager()
 
@@ -87,7 +168,7 @@ class TwitterModel(models.Model):
 
         # different lists for saving related objects
         self._external_links_post_save = []
-        self._foreignkeys_post_save = []
+        self._foreignkeys_pre_save = []
         self._external_links_to_add = []
 
     def _substitute(self, old_instance):
@@ -97,14 +178,13 @@ class TwitterModel(models.Model):
         '''
         self.id = old_instance.id
 
-    def parse(self, response):
+    def parse(self):
         '''
         Parse API response and define fields with values
         '''
-        for key, value in response.items():
-
-            if key == self.remote_pk_field:
-                key = 'graph_id'
+        for key, value in self._response.items():
+            if key == '_api':
+                continue
 
             try:
                 field, model, direct, m2m = self._meta.get_field_by_name(key)
@@ -114,19 +194,17 @@ class TwitterModel(models.Model):
 
             if isinstance(field, RelatedObject) and value:
                 for item in value:
-                    rel_instance = field.model()
-                    rel_instance.parse(dict(item))
+                    rel_instance = field.model.remote.parse_response_object(item)
                     self._external_links_post_save += [(field.field.name, rel_instance)]
             else:
-                if isinstance(field, models.DateTimeField) and value:
-                    value = dateutil.parser.parse(value)#.replace(tzinfo=None)
+                if isinstance(field, (models.BooleanField)):
+                    value = bool(value)
 
                 elif isinstance(field, (models.OneToOneField, models.ForeignKey)) and value:
-                    rel_instance = field.rel.to()
-                    rel_instance.parse(dict(value))
+                    rel_instance = field.rel.to.remote.parse_response_object(value)
                     value = rel_instance
                     if isinstance(field, models.ForeignKey):
-                        self._foreignkeys_post_save += [(key, rel_instance)]
+                        self._foreignkeys_pre_save += [(key, rel_instance)]
 
                 elif isinstance(field, (fields.CommaSeparatedCharField, models.CommaSeparatedIntegerField)) and isinstance(value, list):
                     value = ','.join([unicode(v) for v in value])
@@ -141,11 +219,11 @@ class TwitterModel(models.Model):
         '''
         Save all related instances before or after current instance
         '''
-        for field, instance in self._foreignkeys_post_save:
+        for field, instance in self._foreignkeys_pre_save:
             instance = instance.__class__.remote.get_or_create_from_instance(instance)
             instance.save()
             setattr(self, field, instance)
-        self._foreignkeys_post_save = []
+        self._foreignkeys_pre_save = []
 
         super(TwitterModel, self).save(*args, **kwargs)
 
@@ -166,14 +244,32 @@ class TwitterCommonModel(TwitterModel):
     class Meta:
         abstract = True
 
+    _tweepy_model = None
+    _response = None
+
     id = models.BigIntegerField(u'', primary_key=True)
-    id_str = models.CharField(u'', max_length=30)
-
     created_at = models.DateTimeField(u'')
-
     lang = models.CharField(u'', max_length=10)
+    entities = fields.JSONField()
 
-    entities = fields.PickleField()
+    fetched = models.DateTimeField(u'Обновлено', null=True, blank=True)
+
+    def set_tweepy(self, model):
+        self._tweepy_model = model
+        self._response = dict(self._tweepy_model.__dict__)
+
+    @property
+    def tweepy(self):
+        if not self._tweepy_model:
+            # get fresh instance with the same ID, set tweepy object and refresh attributes
+            instance = self.__class__.remote.get(self.id)
+            self.set_tweepy(instance.tweepy)
+            self.parse()
+        return self._tweepy_model
+
+    def parse(self):
+        self._response.pop('id_str')
+        super(TwitterCommonModel, self).parse()
 
 class User(TwitterCommonModel):
     class Meta:
@@ -182,9 +278,9 @@ class User(TwitterCommonModel):
     screen_name = models.CharField(u'', max_length=50, unique=True)
 
     name = models.CharField(u'', max_length=100)
-    description = models.CharField(u'', max_length=100)
+    description = models.TextField(u'')
     location = models.CharField(u'', max_length=100)
-    time_zone = models.CharField(u'', max_length=100)
+    time_zone = models.CharField(u'', max_length=100, null=True)
 
     contributors_enabled = models.BooleanField(u'')
     default_profile = models.BooleanField(u'')
@@ -205,32 +301,47 @@ class User(TwitterCommonModel):
     profile_banner_url = models.URLField(u'')
     profile_image_url = models.URLField(u'')
     profile_image_url_https = models.URLField(u'')
-    url = models.URLField(u'')
+    url = models.URLField(u'', null=True)
 
     profile_link_color = models.CharField(u'', max_length=6)
     profile_sidebar_border_color = models.CharField(u'', max_length=6)
     profile_sidebar_fill_color = models.CharField(u'', max_length=6)
     profile_text_color = models.CharField(u'', max_length=6)
 
-    favourites_count = models.PositiveIntegerField(u'')
+    favorites_count = models.PositiveIntegerField(u'')
     followers_count = models.PositiveIntegerField(u'')
     friends_count = models.PositiveIntegerField(u'')
     listed_count = models.PositiveIntegerField(u'')
     statuses_count = models.PositiveIntegerField(u'')
-    utc_offset = models.IntegerField(u'')
+    utc_offset = models.IntegerField(u'', null=True)
 
-    status = models.ForeignKey('Status')
+    followers = models.ManyToManyField('User', related_name='followings')
+
+    objects = models.Manager()
+    remote = UserTwitterManager(methods={
+        'get': 'get_user',
+    })
 
     def get_url(self):
         return 'https://twitter.com/%s' % self.screen_name
 
+    def parse(self):
+        self._response['favorites_count'] = self._response['favourites_count']
+        if 'status' in self._response:
+            self._response.pop('status')
+        super(User, self).parse()
+
+    def fetch_followers(self, **kwargs):
+        return User.remote.fetch_followers_for_user(user=self, **kwargs)
+
+    def fetch_statuses(self, **kwargs):
+        return Status.remote.fetch_for_user(user=self, **kwargs)
 
 class Status(TwitterCommonModel):
     class Meta:
         pass
 
-    author = models.ForeignKey('User')
-    user = models.ForeignKey('User')
+    author = models.ForeignKey('User', related_name='statuses')
 
     text = models.TextField(u'')
 
@@ -239,36 +350,48 @@ class Status(TwitterCommonModel):
     truncated = models.BooleanField(u'')
 
     source = models.CharField(u'', max_length=100)
-    source_url = models.URLField(u'')
+    source_url = models.URLField(u'', null=True)
 
-    favorite_count = models.PositiveIntegerField(u'')
-    retweet_count = models.PositiveIntegerField(u'')
+    favorites_count = models.PositiveIntegerField(u'')
+    retweets_count = models.PositiveIntegerField(u'')
 
 # 'in_reply_to_screen_name': 'mrshoranweyhey',
 # 'in_reply_to_status_id': 327912852486762497L,
 # 'in_reply_to_status_id_str': '327912852486762497',
 # 'in_reply_to_user_id = models.BigIntegerField(u'', primary_key=True)
 # 'in_reply_to_user_id_str': '1323314442',
-    in_reply_to_status = models.ForeignKey('Status')
-    in_reply_to_user = models.ForeignKey('User')
+    in_reply_to_status = models.ForeignKey('Status', null=True, related_name='replies')
+    in_reply_to_user = models.ForeignKey('User', null=True, related_name='replies')
 
-    def parse(self, response):
-
-#        if 'in_reply_to_user_id' in response:
-#            response.pop('in_reply_to_user_id_str')
-#        if 'in_reply_to_status_id_str' in response:
-#            response.pop('in_reply_to_status_id_str')
-
-        if 'in_reply_to_screen_name' in response:
-            response.pop('in_reply_to_screen_name')
-        if 'in_reply_to_user_id_str' in response:
-            response.pop('in_reply_to_user_id_str')
-        if 'in_reply_to_status_id_str' in response:
-            response.pop('in_reply_to_status_id_str')
-
-        super(Status, self).parse(response)
-
+#format doesn't clear:
 # 'contributors': None,
 # 'coordinates': None,
 # 'geo': None,
 # 'place': None,
+
+    objects = models.Manager()
+    remote = StatusTwitterManager(methods={
+        'get': 'get_status',
+    })
+
+    def get_url(self):
+        return 'https://twitter.com/%s/status/%d' % (self.author.screen_name, self.id)
+
+    def parse(self):
+        self._response['favorites_count'] = self._response['favorite_count']
+        self._response['retweets_count'] = self._response['retweet_count']
+#        if 'in_reply_to_user_id' in response:
+#            response.pop('in_reply_to_user_id_str')
+#        if 'in_reply_to_status_id_str' in response:
+#            response.pop('in_reply_to_status_id_str')
+        if 'user' in self._response:
+            self._response.pop('user')
+
+        if 'in_reply_to_screen_name' in self._response:
+            self._response.pop('in_reply_to_screen_name')
+        if 'in_reply_to_user_id_str' in self._response:
+            self._response.pop('in_reply_to_user_id_str')
+        if 'in_reply_to_status_id_str' in self._response:
+            self._response.pop('in_reply_to_status_id_str')
+
+        super(Status, self).parse()
