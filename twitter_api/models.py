@@ -157,6 +157,13 @@ class StatusTwitterManager(TwitterManager):
         instances = [self.get_or_create_from_instance(instance) for instance in instances]
         return instances
 
+    def fetch_retweets(self, status, count=100, **kwargs):
+        # https://dev.twitter.com/docs/api/1.1/get/statuses/retweets/%3Aid
+        instances = status.tweepy.retweets(count=count, **kwargs)
+        instances = self.parse_response_list(instances)
+        instances = [self.get_or_create_from_instance(instance) for instance in instances]
+        return instances
+
 class TwitterModel(models.Model):
     class Meta:
         abstract = True
@@ -268,7 +275,7 @@ class TwitterCommonModel(TwitterModel):
         return self._tweepy_model
 
     def parse(self):
-        self._response.pop('id_str')
+        self._response.pop('id_str', None)
         super(TwitterCommonModel, self).parse()
 
 class User(TwitterCommonModel):
@@ -294,14 +301,14 @@ class User(TwitterCommonModel):
     protected = models.BooleanField(u'')
     verified = models.BooleanField(u'')
 
-    profile_background_image_url = models.URLField(u'')
-    profile_background_image_url_https = models.URLField(u'')
+    profile_background_image_url = models.URLField(u'', max_length=300)
+    profile_background_image_url_https = models.URLField(u'', max_length=300)
     profile_background_tile = models.BooleanField(u'')
     profile_background_color = models.CharField(u'', max_length=6)
-    profile_banner_url = models.URLField(u'')
-    profile_image_url = models.URLField(u'')
-    profile_image_url_https = models.URLField(u'')
-    url = models.URLField(u'', null=True)
+    profile_banner_url = models.URLField(u'', max_length=300)
+    profile_image_url = models.URLField(u'', max_length=300)
+    profile_image_url_https = models.URLField(u'', max_length=300)
+    url = models.URLField(u'', max_length=300, null=True)
 
     profile_link_color = models.CharField(u'', max_length=6)
     profile_sidebar_border_color = models.CharField(u'', max_length=6)
@@ -322,13 +329,15 @@ class User(TwitterCommonModel):
         'get': 'get_user',
     })
 
+    def __unicode__(self):
+        return self.name
+
     def get_url(self):
         return 'https://twitter.com/%s' % self.screen_name
 
     def parse(self):
-        self._response['favorites_count'] = self._response['favourites_count']
-        if 'status' in self._response:
-            self._response.pop('status')
+        self._response['favorites_count'] = self._response.pop('favourites_count', 0)
+        self._response.pop('status', None)
         super(User, self).parse()
 
     def fetch_followers(self, **kwargs):
@@ -355,13 +364,10 @@ class Status(TwitterCommonModel):
     favorites_count = models.PositiveIntegerField(u'')
     retweets_count = models.PositiveIntegerField(u'')
 
-# 'in_reply_to_screen_name': 'mrshoranweyhey',
-# 'in_reply_to_status_id': 327912852486762497L,
-# 'in_reply_to_status_id_str': '327912852486762497',
-# 'in_reply_to_user_id = models.BigIntegerField(u'', primary_key=True)
-# 'in_reply_to_user_id_str': '1323314442',
     in_reply_to_status = models.ForeignKey('Status', null=True, related_name='replies')
     in_reply_to_user = models.ForeignKey('User', null=True, related_name='replies')
+
+    retweeted_status = models.ForeignKey('Status', null=True, related_name='retweets')
 
 #format doesn't clear:
 # 'contributors': None,
@@ -374,24 +380,34 @@ class Status(TwitterCommonModel):
         'get': 'get_status',
     })
 
+    def __unicode__(self):
+        return u'%s: %s' % (self.author, self.text)
+
     def get_url(self):
         return 'https://twitter.com/%s/status/%d' % (self.author.screen_name, self.id)
 
     def parse(self):
-        self._response['favorites_count'] = self._response['favorite_count']
-        self._response['retweets_count'] = self._response['retweet_count']
-#        if 'in_reply_to_user_id' in response:
-#            response.pop('in_reply_to_user_id_str')
-#        if 'in_reply_to_status_id_str' in response:
-#            response.pop('in_reply_to_status_id_str')
-        if 'user' in self._response:
-            self._response.pop('user')
+        self._response['favorites_count'] = self._response.pop('favorite_count', 0)
+        self._response['retweets_count'] = self._response.pop('retweet_count', 0)
 
-        if 'in_reply_to_screen_name' in self._response:
-            self._response.pop('in_reply_to_screen_name')
-        if 'in_reply_to_user_id_str' in self._response:
-            self._response.pop('in_reply_to_user_id_str')
-        if 'in_reply_to_status_id_str' in self._response:
-            self._response.pop('in_reply_to_status_id_str')
+        self._response.pop('user', None)
+        self._response.pop('in_reply_to_screen_name', None)
+        self._response.pop('in_reply_to_user_id_str', None)
+        self._response.pop('in_reply_to_status_id_str', None)
+
+        for field_name, model in (('in_reply_to_status', Status), ('in_reply_to_user', User)):
+            try:
+                id = int(self._response.pop(field_name + '_id', None))
+                setattr(self, field_name, model.objects.get(pk=id))
+            except model.DoesNotExist:
+                try:
+                    self._foreignkeys_pre_save += [(field_name, model.remote.get(id))]
+                except tweepy.TweepError:
+                    pass
+            except TypeError:
+                pass
 
         super(Status, self).parse()
+
+    def fetch_retweets(self, **kwargs):
+        return Status.remote.fetch_retweets(status=self, **kwargs)

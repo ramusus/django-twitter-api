@@ -24,3 +24,7 @@ class StatusFactory(factory.Factory):
     id = factory.Sequence(lambda n: n)
     created_at = datetime.now()
     entities = {}
+
+    author = factory.SubFactory(UserFactory)
+    favorites_count = 0
+    retweets_count = 0

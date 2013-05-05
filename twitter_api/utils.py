@@ -62,7 +62,7 @@ def api(method, *args, **kwargs):
 #        data = {"error_code":1,"error_msg":"An unknown error occurred"}
 #        return None
     except Exception, e:
-        log.error("Unhandled error: %s registered while executing method %s with params %s" % (e, method, kwargs))
+        log.error("Unhandled error: %s registered while executing method %s with params args=%s, kwargs=%s" % (e, method, args, kwargs))
         raise e
 
 #    if getattr(response, 'error_code', None):

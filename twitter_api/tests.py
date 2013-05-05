@@ -2,7 +2,7 @@
 from django.test import TestCase
 from utils import api
 from models import User, Status
-from factories import UserFactory
+from factories import UserFactory, StatusFactory
 import tweepy
 
 STATUS_ID = 327926550815207424
@@ -32,6 +32,23 @@ class TwitterApiTest(TestCase):
         self.assertEqual(instance.screen_name, USER_SCREEN_NAME)
         self.assertTrue(isinstance(instance.tweepy, tweepy.models.User))
         self.assertEqual(instance.tweepy.id_str, str(USER_ID))
+
+    def test_fetch_status(self):
+
+        self.assertEqual(Status.objects.count(), 0)
+
+        instance = Status.remote.fetch(STATUS_ID)
+
+        self.assertEqual(Status.objects.count(), 2)
+
+        self.assertEqual(instance.id, STATUS_ID)
+        self.assertEqual(instance.source, 'SocialEngage')
+        self.assertEqual(instance.source_url, 'http://www.exacttarget.com/social')
+        self.assertEqual(instance.text, '@mrshoranweyhey Thanks for the love! How about a follow for a follow? :) ^LF')
+        self.assertEqual(instance.in_reply_to_status_id, 327912852486762497)
+        self.assertEqual(instance.in_reply_to_user_id, 1323314442)
+        self.assertEqual(instance.in_reply_to_status, Status.objects.get(id=327912852486762497))
+        self.assertEqual(instance.in_reply_to_user, User.objects.get(id=1323314442))
 
     def test_fetch_user(self):
 
@@ -74,3 +91,12 @@ class TwitterApiTest(TestCase):
         self.assertTrue(len(instances) > 870)
         self.assertTrue(len(instances) < 1000)
         self.assertEqual(len(instances), User.objects.count()-1)
+
+    def test_fetch_status_retweets(self):
+
+        instance = StatusFactory.create(id=329231054282055680)
+
+        self.assertEqual(Status.objects.count(), 1)
+        instances = instance.fetch_retweets()
+        self.assertTrue(len(instances) >= 10)
+        self.assertEqual(len(instances), Status.objects.count()-1)
