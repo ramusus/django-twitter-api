@@ -12,7 +12,7 @@ import dateutil.parser
 import logging
 import re
 
-__all__ = ['User', 'Status', 'TwitterModel', 'TwitterContentError', 'TwitterManager']
+__all__ = ['User', 'Status', 'TwitterContentError', 'TwitterModel', 'TwitterManager']
 
 log = logging.getLogger('twitter_api')
 
@@ -369,11 +369,11 @@ class Status(TwitterCommonModel):
 
     retweeted_status = models.ForeignKey('Status', null=True, related_name='retweets')
 
-#format doesn't clear:
-# 'contributors': None,
-# 'coordinates': None,
-# 'geo': None,
-# 'place': None,
+    place = fields.JSONField()
+    # format the next fields doesn't clear
+    contributors = fields.JSONField()
+    coordinates = fields.JSONField()
+    geo = fields.JSONField()
 
     objects = models.Manager()
     remote = StatusTwitterManager(methods={
