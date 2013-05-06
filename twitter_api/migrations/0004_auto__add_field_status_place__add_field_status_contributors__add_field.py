@@ -10,22 +10,22 @@ class Migration(SchemaMigration):
     def forwards(self, orm):
         # Adding field 'Status.place'
         db.add_column('twitter_api_status', 'place',
-                      self.gf('annoying.fields.JSONField')(default=None),
+                      self.gf('annoying.fields.JSONField')(null=True),
                       keep_default=False)
 
         # Adding field 'Status.contributors'
         db.add_column('twitter_api_status', 'contributors',
-                      self.gf('annoying.fields.JSONField')(default=None),
+                      self.gf('annoying.fields.JSONField')(null=True),
                       keep_default=False)
 
         # Adding field 'Status.coordinates'
         db.add_column('twitter_api_status', 'coordinates',
-                      self.gf('annoying.fields.JSONField')(default=None),
+                      self.gf('annoying.fields.JSONField')(null=True),
                       keep_default=False)
 
         # Adding field 'Status.geo'
         db.add_column('twitter_api_status', 'geo',
-                      self.gf('annoying.fields.JSONField')(default=None),
+                      self.gf('annoying.fields.JSONField')(null=True),
                       keep_default=False)
 
     def backwards(self, orm):
@@ -45,19 +45,19 @@ class Migration(SchemaMigration):
         'twitter_api.status': {
             'Meta': {'object_name': 'Status'},
             'author': ('django.db.models.fields.related.ForeignKey', [], {'related_name': "'statuses'", 'to': "orm['twitter_api.User']"}),
-            'contributors': ('annoying.fields.JSONField', [], {}),
-            'coordinates': ('annoying.fields.JSONField', [], {}),
+            'contributors': ('annoying.fields.JSONField', [], {'null': 'True'}),
+            'coordinates': ('annoying.fields.JSONField', [], {'null': 'True'}),
             'created_at': ('django.db.models.fields.DateTimeField', [], {}),
             'entities': ('annoying.fields.JSONField', [], {}),
             'favorited': ('django.db.models.fields.BooleanField', [], {'default': 'False'}),
             'favorites_count': ('django.db.models.fields.PositiveIntegerField', [], {}),
             'fetched': ('django.db.models.fields.DateTimeField', [], {'null': 'True', 'blank': 'True'}),
-            'geo': ('annoying.fields.JSONField', [], {}),
+            'geo': ('annoying.fields.JSONField', [], {'null': 'True'}),
             'id': ('django.db.models.fields.BigIntegerField', [], {'primary_key': 'True'}),
             'in_reply_to_status': ('django.db.models.fields.related.ForeignKey', [], {'related_name': "'replies'", 'null': 'True', 'to': "orm['twitter_api.Status']"}),
             'in_reply_to_user': ('django.db.models.fields.related.ForeignKey', [], {'related_name': "'replies'", 'null': 'True', 'to': "orm['twitter_api.User']"}),
             'lang': ('django.db.models.fields.CharField', [], {'max_length': '10'}),
-            'place': ('annoying.fields.JSONField', [], {}),
+            'place': ('annoying.fields.JSONField', [], {'null': 'True'}),
             'retweeted': ('django.db.models.fields.BooleanField', [], {'default': 'False'}),
             'retweeted_status': ('django.db.models.fields.related.ForeignKey', [], {'related_name': "'retweets'", 'null': 'True', 'to': "orm['twitter_api.Status']"}),
             'retweets_count': ('django.db.models.fields.PositiveIntegerField', [], {}),

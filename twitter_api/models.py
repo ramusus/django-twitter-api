@@ -369,11 +369,11 @@ class Status(TwitterCommonModel):
 
     retweeted_status = models.ForeignKey('Status', null=True, related_name='retweets')
 
-    place = fields.JSONField()
+    place = fields.JSONField(null=True)
     # format the next fields doesn't clear
-    contributors = fields.JSONField()
-    coordinates = fields.JSONField()
-    geo = fields.JSONField()
+    contributors = fields.JSONField(null=True)
+    coordinates = fields.JSONField(null=True)
+    geo = fields.JSONField(null=True)
 
     objects = models.Manager()
     remote = StatusTwitterManager(methods={
