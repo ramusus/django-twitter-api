@@ -90,7 +90,19 @@ class TwitterApiTest(TestCase):
         instances = instance.fetch_followers(all=True)
         self.assertTrue(len(instances) > 870)
         self.assertTrue(len(instances) < 1000)
+        self.assertTrue(isinstance(instances[0], User))
         self.assertEqual(len(instances), User.objects.count()-1)
+
+    def test_fetch_user_followers_ids(self):
+
+        instance = UserFactory.create(id=USER1_ID)
+
+        self.assertEqual(User.objects.count(), 1)
+        ids = instance.fetch_followers_ids(all=True)
+        self.assertTrue(len(ids) > 870)
+        self.assertTrue(len(ids) < 1000)
+        self.assertTrue(isinstance(ids[0], int))
+        self.assertEqual(User.objects.count(), 1)
 
     def test_fetch_status_retweets(self):
 

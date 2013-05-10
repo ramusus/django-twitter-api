@@ -12,7 +12,7 @@ import dateutil.parser
 import logging
 import re
 
-__all__ = ['User', 'Status', 'TwitterContentError', 'TwitterModel', 'TwitterManager']
+__all__ = ['User', 'Status', 'TwitterContentError', 'TwitterModel', 'TwitterManager', 'UserTwitterManager']
 
 log = logging.getLogger('twitter_api')
 
@@ -38,7 +38,7 @@ class TwitterManager(models.Manager):
         '''
         Return object by url
         '''
-        m = re.findall(r'(?:https?://)?(?:www\.)?twitter\.com/(.+)/?', url)
+        m = re.findall(r'(?:https?://)?(?:www\.)?twitter\.com/([^/]+)/?', url)
         if not len(m):
             raise ValueError("Url should be started with https://twitter.com/")
 
@@ -132,19 +132,27 @@ class TwitterManager(models.Manager):
 
 class UserTwitterManager(TwitterManager):
 
-    def fetch_followers_for_user(self, user, all=False, count=20, **kwargs):
+    def fetch_followers_ids_for_user(self, user, all=False, count=5000, **kwargs):
         # https://dev.twitter.com/docs/api/1.1/get/followers/ids
+        if all:
+            cursor = tweepy.Cursor(user.tweepy._api.followers_ids, id=user.id, count=count)
+            return list(cursor.items())
+        else:
+            raise NotImplementedError("This method implemented only with argument all=True")
+
+    def fetch_followers_for_user(self, user, all=False, count=200, **kwargs):
         # https://dev.twitter.com/docs/api/1.1/get/followers/list
+        # in docs default count is 20, but maximum is 200
         if all:
             # TODO: make optimization: break cursor iteration after getting already existing user and switch to ids REST method
             user.followers.clear()
-            cursor = tweepy.Cursor(user.tweepy._api.followers, id=user.id, count=200)
+            cursor = tweepy.Cursor(user.tweepy._api.followers, id=user.id, count=count)
             for instance in cursor.items():
                 instance = self.parse_response_object(instance)
                 instance = self.get_or_create_from_instance(instance)
                 user.followers.add(instance)
         else:
-            raise NotImplementedError("Now implemented only with argument all=True")
+            raise NotImplementedError("This method implemented only with argument all=True")
         return user.followers.all()
 
 class StatusTwitterManager(TwitterManager):
@@ -254,12 +262,12 @@ class TwitterCommonModel(TwitterModel):
     _tweepy_model = None
     _response = None
 
-    id = models.BigIntegerField(u'', primary_key=True)
-    created_at = models.DateTimeField(u'')
-    lang = models.CharField(u'', max_length=10)
+    id = models.BigIntegerField(primary_key=True)
+    created_at = models.DateTimeField()
+    lang = models.CharField(max_length=10)
     entities = fields.JSONField()
 
-    fetched = models.DateTimeField(u'Обновлено', null=True, blank=True)
+    fetched = models.DateTimeField(u'Fetched', null=True, blank=True)
 
     def set_tweepy(self, model):
         self._tweepy_model = model
@@ -282,45 +290,45 @@ class User(TwitterCommonModel):
     class Meta:
         pass
 
-    screen_name = models.CharField(u'', max_length=50, unique=True)
+    screen_name = models.CharField(u'Screen name', max_length=50, unique=True)
 
-    name = models.CharField(u'', max_length=100)
-    description = models.TextField(u'')
-    location = models.CharField(u'', max_length=100)
-    time_zone = models.CharField(u'', max_length=100, null=True)
+    name = models.CharField(u'Name', max_length=100)
+    description = models.TextField(u'Description')
+    location = models.CharField(u'Location', max_length=100)
+    time_zone = models.CharField(u'Time zone', max_length=100, null=True)
 
-    contributors_enabled = models.BooleanField(u'')
-    default_profile = models.BooleanField(u'')
-    default_profile_image = models.BooleanField(u'')
-    follow_request_sent = models.BooleanField(u'')
-    following = models.BooleanField(u'')
-    geo_enabled = models.BooleanField(u'')
-    is_translator = models.BooleanField(u'')
-    notifications = models.BooleanField(u'')
-    profile_use_background_image = models.BooleanField(u'')
-    protected = models.BooleanField(u'')
-    verified = models.BooleanField(u'')
+    contributors_enabled = models.BooleanField(u'Contributors enabled')
+    default_profile = models.BooleanField(u'Default profile')
+    default_profile_image = models.BooleanField(u'Default profile image')
+    follow_request_sent = models.BooleanField(u'Follow request sent')
+    following = models.BooleanField(u'Following')
+    geo_enabled = models.BooleanField(u'Geo enabled')
+    is_translator = models.BooleanField(u'Is translator')
+    notifications = models.BooleanField(u'Notifications')
+    profile_use_background_image = models.BooleanField(u'Profile use background image')
+    protected = models.BooleanField(u'Protected')
+    verified = models.BooleanField(u'Verified')
 
-    profile_background_image_url = models.URLField(u'', max_length=300)
-    profile_background_image_url_https = models.URLField(u'', max_length=300)
-    profile_background_tile = models.BooleanField(u'')
-    profile_background_color = models.CharField(u'', max_length=6)
-    profile_banner_url = models.URLField(u'', max_length=300)
-    profile_image_url = models.URLField(u'', max_length=300)
-    profile_image_url_https = models.URLField(u'', max_length=300)
-    url = models.URLField(u'', max_length=300, null=True)
+    profile_background_image_url = models.URLField(max_length=300)
+    profile_background_image_url_https = models.URLField(max_length=300)
+    profile_background_tile = models.BooleanField()
+    profile_background_color = models.CharField(max_length=6)
+    profile_banner_url = models.URLField(max_length=300)
+    profile_image_url = models.URLField(max_length=300)
+    profile_image_url_https = models.URLField(max_length=300)
+    url = models.URLField(max_length=300, null=True)
 
-    profile_link_color = models.CharField(u'', max_length=6)
-    profile_sidebar_border_color = models.CharField(u'', max_length=6)
-    profile_sidebar_fill_color = models.CharField(u'', max_length=6)
-    profile_text_color = models.CharField(u'', max_length=6)
+    profile_link_color = models.CharField(max_length=6)
+    profile_sidebar_border_color = models.CharField(max_length=6)
+    profile_sidebar_fill_color = models.CharField(max_length=6)
+    profile_text_color = models.CharField(max_length=6)
 
-    favorites_count = models.PositiveIntegerField(u'')
-    followers_count = models.PositiveIntegerField(u'')
-    friends_count = models.PositiveIntegerField(u'')
-    listed_count = models.PositiveIntegerField(u'')
-    statuses_count = models.PositiveIntegerField(u'')
-    utc_offset = models.IntegerField(u'', null=True)
+    favorites_count = models.PositiveIntegerField()
+    followers_count = models.PositiveIntegerField()
+    friends_count = models.PositiveIntegerField()
+    listed_count = models.PositiveIntegerField()
+    statuses_count = models.PositiveIntegerField()
+    utc_offset = models.IntegerField(null=True)
 
     followers = models.ManyToManyField('User', related_name='followings')
 
@@ -343,6 +351,9 @@ class User(TwitterCommonModel):
     def fetch_followers(self, **kwargs):
         return User.remote.fetch_followers_for_user(user=self, **kwargs)
 
+    def fetch_followers_ids(self, **kwargs):
+        return User.remote.fetch_followers_ids_for_user(user=self, **kwargs)
+
     def fetch_statuses(self, **kwargs):
         return Status.remote.fetch_for_user(user=self, **kwargs)
 
@@ -352,17 +363,17 @@ class Status(TwitterCommonModel):
 
     author = models.ForeignKey('User', related_name='statuses')
 
-    text = models.TextField(u'')
+    text = models.TextField()
 
-    favorited = models.BooleanField(u'')
-    retweeted = models.BooleanField(u'')
-    truncated = models.BooleanField(u'')
+    favorited = models.BooleanField()
+    retweeted = models.BooleanField()
+    truncated = models.BooleanField()
 
-    source = models.CharField(u'', max_length=100)
-    source_url = models.URLField(u'', null=True)
+    source = models.CharField(max_length=100)
+    source_url = models.URLField(null=True)
 
-    favorites_count = models.PositiveIntegerField(u'')
-    retweets_count = models.PositiveIntegerField(u'')
+    favorites_count = models.PositiveIntegerField()
+    retweets_count = models.PositiveIntegerField()
 
     in_reply_to_status = models.ForeignKey('Status', null=True, related_name='replies')
     in_reply_to_user = models.ForeignKey('User', null=True, related_name='replies')

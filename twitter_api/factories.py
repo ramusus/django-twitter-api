@@ -3,7 +3,7 @@ from datetime import datetime
 import factory
 import random
 
-class UserFactory(factory.Factory):
+class UserFactory(factory.DjangoModelFactory):
     FACTORY_FOR = User
 
     id = factory.Sequence(lambda n: n)
@@ -18,7 +18,7 @@ class UserFactory(factory.Factory):
     statuses_count = 0
     utc_offset = 0
 
-class StatusFactory(factory.Factory):
+class StatusFactory(factory.DjangoModelFactory):
     FACTORY_FOR = Status
 
     id = factory.Sequence(lambda n: n)
