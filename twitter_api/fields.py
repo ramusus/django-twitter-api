@@ -3,6 +3,7 @@ from django.db import models
 from django.core import validators
 from django.utils.translation import ugettext_lazy as _
 from annoying.fields import JSONField
+from picklefield.fields import PickledObjectField
 import re
 
 class PositiveSmallIntegerRangeField(models.PositiveSmallIntegerField):

@@ -17,6 +17,7 @@ setup(
     install_requires=[
         'django',
         'django-annoying',
+        'django-picklefield',
         'django-oauth-tokens>=0.2.2',
         'python-dateutil>=1.5',
         'tweepy',
