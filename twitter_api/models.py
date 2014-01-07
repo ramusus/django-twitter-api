@@ -167,7 +167,9 @@ class StatusTwitterManager(TwitterManager):
 
     def fetch_retweets(self, status, count=100, **kwargs):
         # https://dev.twitter.com/docs/api/1.1/get/statuses/retweets/%3Aid
-        instances = status.tweepy.retweets(count=count, **kwargs)
+        # TODO: tweepy 2.1 doesn't support count argument, but API does
+        #kwargs['count'] = count
+        instances = status.tweepy.retweets(**kwargs)
         instances = self.parse_response_list(instances)
         instances = [self.get_or_create_from_instance(instance) for instance in instances]
         return instances
