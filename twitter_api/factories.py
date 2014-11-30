@@ -1,10 +1,11 @@
-from models import User, Status
 from datetime import datetime
-import factory
 import random
 
+import factory
+import models
+
+
 class UserFactory(factory.DjangoModelFactory):
-    FACTORY_FOR = User
 
     id = factory.Sequence(lambda n: n)
     screen_name = factory.Sequence(lambda n: n)
@@ -18,8 +19,11 @@ class UserFactory(factory.DjangoModelFactory):
     statuses_count = 0
     utc_offset = 0
 
+    class Meta:
+        model = models.User
+
+
 class StatusFactory(factory.DjangoModelFactory):
-    FACTORY_FOR = Status
 
     id = factory.Sequence(lambda n: n)
     created_at = datetime.now()
@@ -28,3 +32,6 @@ class StatusFactory(factory.DjangoModelFactory):
     author = factory.SubFactory(UserFactory)
     favorites_count = 0
     retweets_count = 0
+
+    class Meta:
+        model = models.Status
