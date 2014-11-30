@@ -15,7 +15,7 @@ import tweepy
 from .decorators import fetch_all
 from .utils import api
 
-__all__ = ['User', 'Status', 'TwitterContentError', 'TwitterModel', 'TwitterManager', 'UserTwitterManager']
+__all__ = ['User', 'Status', 'TwitterContentError', 'TwitterModel', 'TwitterManager', 'UserManager']
 
 log = logging.getLogger('twitter_api')
 
@@ -139,7 +139,7 @@ class TwitterManager(models.Manager):
         return instances
 
 
-class UserTwitterManager(TwitterManager):
+class UserManager(TwitterManager):
 
     def get_followers_ids_for_user(self, user, all=False, count=5000, **kwargs):
         # https://dev.twitter.com/docs/api/1.1/get/followers/ids
@@ -165,7 +165,7 @@ class UserTwitterManager(TwitterManager):
         return user.followers.all()
 
 
-class StatusTwitterManager(TwitterManager):
+class StatusManager(TwitterManager):
 
     @fetch_all(max_count=200)
     def fetch_for_user(self, user, count=20, **kwargs):
@@ -366,7 +366,7 @@ class User(TwitterBaseModel):
     followers = ManyToManyHistoryField('User', cache=True)
 
     objects = models.Manager()
-    remote = UserTwitterManager(methods={
+    remote = UserManager(methods={
         'get': 'get_user',
     })
 
@@ -421,7 +421,7 @@ class Status(TwitterBaseModel):
     geo = fields.JSONField(null=True)
 
     objects = models.Manager()
-    remote = StatusTwitterManager(methods={
+    remote = StatusManager(methods={
         'get': 'get_status',
     })
 
