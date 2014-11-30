@@ -14,7 +14,7 @@ Add into `settings.py` lines:
         ...
         'oauth_tokens',
         'taggit',
-        'twitter-api',
+        'twitter_api',
     )
 
     # oauth-tokens settings
