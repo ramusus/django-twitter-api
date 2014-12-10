@@ -1,5 +1,6 @@
-from setuptools import setup, find_packages
 import re
+
+from setuptools import setup, find_packages
 
 setup(
     name='django-twitter-api',
@@ -13,12 +14,13 @@ setup(
     license='BSD',
     packages=find_packages(),
     include_package_data=True,
-    zip_safe=False, # because we're including media that Django needs
+    zip_safe=False,  # because we're including media that Django needs
     install_requires=[
         'django',
         'django-annoying',
         'django-picklefield',
         'django-oauth-tokens>=0.2.2',
+        'django-m2m-history>=0.1.2',
         'python-dateutil>=1.5',
         'tweepy',
     ],

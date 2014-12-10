@@ -1,28 +1,35 @@
 # -*- coding: utf-8 -*-
+from datetime import datetime
+import logging
+import re
+
+import dateutil.parser
 from django.db import models
 from django.db.models.fields import FieldDoesNotExist
 from django.db.models.related import RelatedObject
 from django.utils.translation import ugettext as _
-from utils import api
-from decorators import fetch_all
-from datetime import datetime
-import tweepy
 import fields
-import dateutil.parser
-import logging
-import re
+from m2m_history.fields import ManyToManyHistoryField
+import tweepy
 
-__all__ = ['User', 'Status', 'TwitterContentError', 'TwitterModel', 'TwitterManager', 'UserTwitterManager']
+from .decorators import fetch_all
+from .utils import api
+
+__all__ = ['User', 'Status', 'TwitterContentError', 'TwitterModel', 'TwitterManager', 'UserManager']
 
 log = logging.getLogger('twitter_api')
+
 
 class TwitterContentError(Exception):
     pass
 
+
 class TwitterManager(models.Manager):
+
     '''
     Twitter Manager for RESTful CRUD operations
     '''
+
     def __init__(self, methods=None, remote_pk=None, *args, **kwargs):
         if methods and len(methods.items()) < 1:
             raise ValueError('Argument methods must contains at least 1 specified method')
@@ -48,6 +55,7 @@ class TwitterManager(models.Manager):
         '''
         Return object by slug
         '''
+        # TODO: change to self.get method
         return self.model.remote.fetch(slug)
 
     def get_or_create_from_instance(self, instance):
@@ -130,9 +138,10 @@ class TwitterManager(models.Manager):
 
         return instances
 
-class UserTwitterManager(TwitterManager):
 
-    def fetch_followers_ids_for_user(self, user, all=False, count=5000, **kwargs):
+class UserManager(TwitterManager):
+
+    def get_followers_ids_for_user(self, user, all=False, count=5000, **kwargs):
         # https://dev.twitter.com/docs/api/1.1/get/followers/ids
         if all:
             cursor = tweepy.Cursor(user.tweepy._api.followers_ids, id=user.id, count=count)
@@ -155,15 +164,16 @@ class UserTwitterManager(TwitterManager):
             raise NotImplementedError("This method implemented only with argument all=True")
         return user.followers.all()
 
-class StatusTwitterManager(TwitterManager):
+
+class StatusManager(TwitterManager):
 
     @fetch_all(max_count=200)
     def fetch_for_user(self, user, count=20, **kwargs):
         # https://dev.twitter.com/docs/api/1.1/get/statuses/user_timeline
         instances = user.tweepy.timeline(count=count, **kwargs)
         instances = self.parse_response_list(instances, {'user_id': user.id})
-        instances = [self.get_or_create_from_instance(instance) for instance in instances]
-        return instances
+        ids = [self.get_or_create_from_instance(instance).pk for instance in instances]
+        return self.filter(pk__in=ids)
 
     def fetch_retweets(self, status, count=100, **kwargs):
         # https://dev.twitter.com/docs/api/1.1/get/statuses/retweets/%3Aid
@@ -171,14 +181,16 @@ class StatusTwitterManager(TwitterManager):
         #kwargs['count'] = count
         instances = status.tweepy.retweets(**kwargs)
         instances = self.parse_response_list(instances)
-        instances = [self.get_or_create_from_instance(instance) for instance in instances]
-        return instances
+        ids = [self.get_or_create_from_instance(instance).pk for instance in instances]
+        return self.filter(pk__in=ids)
+
 
 class TwitterModel(models.Model):
-    class Meta:
-        abstract = True
 
     objects = models.Manager()
+
+    class Meta:
+        abstract = True
 
     def __init__(self, *args, **kwargs):
         super(TwitterModel, self).__init__(*args, **kwargs)
@@ -186,6 +198,31 @@ class TwitterModel(models.Model):
         # different lists for saving related objects
         self._external_links_post_save = []
         self._foreignkeys_pre_save = []
+        self._external_links_to_add = []
+
+    def save(self, *args, **kwargs):
+        '''
+        Save all related instances before or after current instance
+        '''
+        for field, instance in self._foreignkeys_pre_save:
+            instance = instance.__class__.remote.get_or_create_from_instance(instance)
+            instance.save()
+            setattr(self, field, instance)
+        self._foreignkeys_pre_save = []
+
+        super(TwitterModel, self).save(*args, **kwargs)
+
+        for field, instance in self._external_links_post_save:
+            # set foreignkey to the main instance
+            setattr(instance, field, self)
+            instance.__class__.remote.get_or_create_from_instance(instance)
+        self._external_links_post_save = []
+
+        for field, instance in self._external_links_to_add:
+            # if there is already connected instances, then continue, because it's hard to check for duplicates
+            if getattr(self, field).count():
+                continue
+            getattr(self, field).add(instance)
         self._external_links_to_add = []
 
     def _substitute(self, old_instance):
@@ -232,34 +269,23 @@ class TwitterModel(models.Model):
 
                 setattr(self, key, value)
 
-    def save(self, *args, **kwargs):
-        '''
-        Save all related instances before or after current instance
-        '''
-        for field, instance in self._foreignkeys_pre_save:
-            instance = instance.__class__.remote.get_or_create_from_instance(instance)
-            instance.save()
-            setattr(self, field, instance)
-        self._foreignkeys_pre_save = []
+    def _get_foreignkeys_for_fields(self, *args):
 
-        super(TwitterModel, self).save(*args, **kwargs)
+        for field_name in args:
+            model = self._meta.get_field(field_name).rel.to
+            try:
+                id = int(self._response.pop(field_name + '_id', None))
+                setattr(self, field_name, model.objects.get(pk=id))
+            except model.DoesNotExist:
+                try:
+                    self._foreignkeys_pre_save += [(field_name, model.remote.get(id))]
+                except tweepy.TweepError:
+                    pass
+            except TypeError:
+                pass
 
-        for field, instance in self._external_links_post_save:
-            # set foreignkey to the main instance
-            setattr(instance, field, self)
-            instance.__class__.remote.get_or_create_from_instance(instance)
-        self._external_links_post_save = []
 
-        for field, instance in self._external_links_to_add:
-            # if there is already connected instances, then continue, because it's hard to check for duplicates
-            if getattr(self, field).count():
-                continue
-            getattr(self, field).add(instance)
-        self._external_links_to_add = []
-
-class TwitterCommonModel(TwitterModel):
-    class Meta:
-        abstract = True
+class TwitterBaseModel(TwitterModel):
 
     _tweepy_model = None
     _response = None
@@ -270,6 +296,9 @@ class TwitterCommonModel(TwitterModel):
     entities = fields.JSONField()
 
     fetched = models.DateTimeField(u'Fetched', null=True, blank=True)
+
+    class Meta:
+        abstract = True
 
     def set_tweepy(self, model):
         self._tweepy_model = model
@@ -286,11 +315,13 @@ class TwitterCommonModel(TwitterModel):
 
     def parse(self):
         self._response.pop('id_str', None)
-        super(TwitterCommonModel, self).parse()
+        super(TwitterBaseModel, self).parse()
 
-class User(TwitterCommonModel):
-    class Meta:
-        pass
+    def get_url(self):
+        return 'https://twitter.com/%s' % self.slug
+
+
+class User(TwitterBaseModel):
 
     screen_name = models.CharField(u'Screen name', max_length=50, unique=True)
 
@@ -332,36 +363,36 @@ class User(TwitterCommonModel):
     statuses_count = models.PositiveIntegerField()
     utc_offset = models.IntegerField(null=True)
 
-    followers = models.ManyToManyField('User', related_name='followings')
+    followers = ManyToManyHistoryField('User', cache=True)
 
     objects = models.Manager()
-    remote = UserTwitterManager(methods={
+    remote = UserManager(methods={
         'get': 'get_user',
     })
 
     def __unicode__(self):
         return self.name
 
-    def get_url(self):
-        return 'https://twitter.com/%s' % self.screen_name
+    @property
+    def slug(self):
+        return self.screen_name
 
     def parse(self):
-        self._response['favorites_count'] = self._response.pop('favourites_count', 0)
+        self._response['favorites_count'] = self._response.pop('favourites_count', None)
         self._response.pop('status', None)
         super(User, self).parse()
 
     def fetch_followers(self, **kwargs):
         return User.remote.fetch_followers_for_user(user=self, **kwargs)
 
-    def fetch_followers_ids(self, **kwargs):
-        return User.remote.fetch_followers_ids_for_user(user=self, **kwargs)
+    def get_followers_ids(self, **kwargs):
+        return User.remote.get_followers_ids_for_user(user=self, **kwargs)
 
     def fetch_statuses(self, **kwargs):
         return Status.remote.fetch_for_user(user=self, **kwargs)
 
-class Status(TwitterCommonModel):
-    class Meta:
-        pass
+
+class Status(TwitterBaseModel):
 
     author = models.ForeignKey('User', related_name='statuses')
 
@@ -380,6 +411,7 @@ class Status(TwitterCommonModel):
     in_reply_to_status = models.ForeignKey('Status', null=True, related_name='replies')
     in_reply_to_user = models.ForeignKey('User', null=True, related_name='replies')
 
+    favorites_users = ManyToManyHistoryField('User', related_name='favorites')
     retweeted_status = models.ForeignKey('Status', null=True, related_name='retweets')
 
     place = fields.JSONField(null=True)
@@ -389,15 +421,16 @@ class Status(TwitterCommonModel):
     geo = fields.JSONField(null=True)
 
     objects = models.Manager()
-    remote = StatusTwitterManager(methods={
+    remote = StatusManager(methods={
         'get': 'get_status',
     })
 
     def __unicode__(self):
         return u'%s: %s' % (self.author, self.text)
 
-    def get_url(self):
-        return 'https://twitter.com/%s/status/%d' % (self.author.screen_name, self.id)
+    @property
+    def slug(self):
+        return '/%s/status/%d' % (self.author.screen_name, self.id)
 
     def parse(self):
         self._response['favorites_count'] = self._response.pop('favorite_count', 0)
@@ -408,17 +441,7 @@ class Status(TwitterCommonModel):
         self._response.pop('in_reply_to_user_id_str', None)
         self._response.pop('in_reply_to_status_id_str', None)
 
-        for field_name, model in (('in_reply_to_status', Status), ('in_reply_to_user', User)):
-            try:
-                id = int(self._response.pop(field_name + '_id', None))
-                setattr(self, field_name, model.objects.get(pk=id))
-            except model.DoesNotExist:
-                try:
-                    self._foreignkeys_pre_save += [(field_name, model.remote.get(id))]
-                except tweepy.TweepError:
-                    pass
-            except TypeError:
-                pass
+        self._get_foreignkeys_for_fields('in_reply_to_status', 'in_reply_to_user')
 
         super(Status, self).parse()
 
