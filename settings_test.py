@@ -1,5 +1,8 @@
 INSTALLED_APPS = (
     'oauth_tokens',
+    'm2m_history',
+    'taggit',
+    'twitter_api',
 )
 
 OAUTH_TOKENS_TWITTER_CLIENT_ID = ''

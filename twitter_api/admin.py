@@ -2,6 +2,7 @@
 from django.contrib import admin
 from models import Status, User
 
+
 class TwitterModelAdmin(admin.ModelAdmin):
 
     def get_readonly_fields(self, request, obj=None):
@@ -11,7 +12,7 @@ class TwitterModelAdmin(admin.ModelAdmin):
 
 
 class StatusAdmin(TwitterModelAdmin):
-    pass
+    list_display = ['id', 'author', 'text']
 
 
 class UserAdmin(TwitterModelAdmin):

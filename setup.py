@@ -19,9 +19,9 @@ setup(
         'django',
         'django-annoying',
         'django-picklefield',
-        'django-oauth-tokens>=0.2.2',
+        'django-m2m-history',
+        'django-oauth-tokens>=0.4.1',
         'django-m2m-history>=0.1.2',
-        'python-dateutil>=1.5',
         'tweepy',
     ],
     classifiers=[

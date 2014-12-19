@@ -1,17 +1,20 @@
 # -*- coding: utf-8 -*-
 from django.test import TestCase
+from oauth_tokens.factories import UserCredentialsFactory
 import tweepy
 
 from .factories import UserFactory, StatusFactory
 from .models import User, Status
+from .parser import get_replies
 from .utils import api
-
 
 STATUS_ID = 327926550815207424
 USER_ID = 813286
 USER_SCREEN_NAME = 'BarackObama'
 USER1_ID = 18807761
 USER1_SCREEN_NAME = 'voronezh'
+STATUS_MANY_REPLIES_ID = 538755896063832064
+STATUS_MANY_RETWEETS_ID = 329231054282055680
 
 
 class TwitterApiTest(TestCase):
@@ -112,7 +115,7 @@ class TwitterApiTest(TestCase):
 
     def test_fetch_status_retweets(self):
 
-        instance = StatusFactory(id=329231054282055680)
+        instance = StatusFactory(id=STATUS_MANY_RETWEETS_ID)
 
         self.assertEqual(Status.objects.count(), 1)
 
@@ -120,3 +123,27 @@ class TwitterApiTest(TestCase):
 
         self.assertGreaterEqual(len(instances), 6)
         self.assertEqual(len(instances), Status.objects.count() - 1)
+
+    def test_get_replies(self):
+        """
+            Check what ids[0] < ids[1] < ids[2] ...
+            this also check what there is no duplicates
+        """
+        status = Status.remote.fetch(STATUS_MANY_REPLIES_ID)
+        ids = get_replies(status)
+
+        self.assertListEqual(ids, sorted(ids))
+        self.assertEqual(len(ids), len(set(ids)))
+
+    def test_status_fetch_replies(self):
+        status = Status.remote.fetch(STATUS_MANY_REPLIES_ID)
+
+        self.assertEqual(Status.objects.count(), 1)
+
+        replies = status.fetch_replies()
+
+        self.assertGreater(replies.count(), 50)
+        self.assertEqual(replies.count(), status.replies_count)
+        self.assertEqual(replies.count(), Status.objects.count() - 1)
+
+        self.assertEqual(replies[0].in_reply_to_status, status)
