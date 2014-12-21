@@ -25,17 +25,6 @@ Add into `settings.py` lines:
     OAUTH_TOKENS_TWITTER_USERNAME = ''                                 # user login
     OAUTH_TOKENS_TWITTER_PASSWORD = ''                                 # user password
 
-    # twitter-api settings
-    def twitter_api_get_token_callback():
-        import tweepy
-        auth = tweepy.OAuthHandler(OAUTH_TOKENS_TWITTER_CLIENT_ID, OAUTH_TOKENS_TWITTER_CLIENT_SECRET)
-        auth.username = ''                                              # username
-        auth.access_token = tweepy.oauth.OAuthToken('', '')             # pair of access tokens
-        auth.request_token = tweepy.oauth.OAuthToken('', '')            # pair of request tokens
-        return auth
-
-    TWITTER_API_ACCESS_TOKEN_CALLBACK = twitter_api_get_token_callback
-
 ## Usage examples
 
 ### Simple API request
