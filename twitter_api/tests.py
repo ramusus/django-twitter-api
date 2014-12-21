@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 from django.test import TestCase
+from django.utils import six
 from oauth_tokens.factories import UserCredentialsFactory
 import tweepy
 
@@ -110,7 +111,7 @@ class TwitterApiTest(TestCase):
 
         self.assertGreater(len(ids), 1000)
         self.assertLess(len(ids), 2000)
-        self.assertIsInstance(ids[0], long)
+        self.assertIsInstance(ids[0], six.integer_types)
         self.assertEqual(User.objects.count(), 1)
 
     def test_fetch_status_retweets(self):
