@@ -43,13 +43,15 @@ def get_api():
         token = tokens[0].access_token
 
     delimeter = AccessToken.objects.get_token_class('twitter').delimeter
-    token = token.split(delimeter)
     auth = tweepy.OAuthHandler(TWITTER_CLIENT_ID, TWITTER_CLIENT_SECRET)
-    auth.access_token = tweepy.oauth.OAuthToken(token[0], token[1])
 
-#     for dev version
-#         auth.access_token = '14379302-7JvEkhgKhHndk2juljvIJuvwjQKWpzYVUruyZIi6u'
-#         auth.access_token_secret = 'XZZUHc6dRo29RiiNrJB81GbUrpJUjSkBdUoRFU762p4'
+    token = token.split(delimeter)
+    try:
+        auth.access_token = tweepy.oauth.OAuthToken(token[0], token[1])
+    except AttributeError:
+        # dev version
+        auth.access_token = token[0]
+        auth.access_token_secret = token[1]
 
     return tweepy.API(auth)
 
