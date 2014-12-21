@@ -1,42 +1,58 @@
+import logging
+
 from django.conf import settings
 from oauth_tokens.models import AccessToken
-from datetime import datetime
-import logging
 import tweepy
+
 
 __all__ = ['api']
 
 log = logging.getLogger('twitter_api')
 
-#ACCESS_TOKEN = getattr(settings, 'TWITTER_API_ACCESS_TOKEN', None)
-GET_TOKEN_CALLBACK = getattr(settings, 'TWITTER_API_ACCESS_TOKEN_CALLBACK')
+ACCESS_TOKEN = getattr(settings, 'TWITTER_API_ACCESS_TOKEN', None)
 
-#def get_tokens():
-#    '''
-#    Get all vkontakte tokens list
-#    '''
-#    return AccessToken.objects.filter(provider='twitter').order_by('-granted')
-#
-#def update_token():
-#    '''
-#    Update token from provider and return it
-#    '''
-#    return AccessToken.objects.get_from_provider('twitter')
+TWITTER_CLIENT_ID = getattr(settings, 'OAUTH_TOKENS_TWITTER_CLIENT_ID', None)
+TWITTER_CLIENT_SECRET = getattr(settings, 'OAUTH_TOKENS_TWITTER_CLIENT_SECRET', None)
+
+
+def get_tokens():
+    '''
+    Get all vkontakte tokens list
+    '''
+    return AccessToken.objects.filter(provider='twitter').order_by('-granted_at')
+
+
+def update_token():
+    '''
+    Update token from provider and return it
+    '''
+    return AccessToken.objects.fetch('twitter')
+
 
 def get_api():
     '''
     Return API instance with latest token from database
     '''
-#    if ACCESS_TOKEN:
-#        token = ACCESS_TOKEN
-#    else:
-#        tokens = get_tokens()
-#        if not tokens:
-#            update_token()
-#            tokens = get_tokens()
-#        token = tokens[0].access_token
-    auth = GET_TOKEN_CALLBACK()
+    if ACCESS_TOKEN:
+        token = ACCESS_TOKEN
+    else:
+        tokens = get_tokens()
+        if not tokens:
+            update_token()
+            tokens = get_tokens()
+        token = tokens[0].access_token
+
+    delimeter = AccessToken.objects.get_token_class('twitter').delimeter
+    token = token.split(delimeter)
+    auth = tweepy.OAuthHandler(TWITTER_CLIENT_ID, TWITTER_CLIENT_SECRET)
+    auth.access_token = tweepy.oauth.OAuthToken(token[0], token[1])
+
+#     for dev version
+#         auth.access_token = '14379302-7JvEkhgKhHndk2juljvIJuvwjQKWpzYVUruyZIi6u'
+#         auth.access_token_secret = 'XZZUHc6dRo29RiiNrJB81GbUrpJUjSkBdUoRFU762p4'
+
     return tweepy.API(auth)
+
 
 def api(method, *args, **kwargs):
     '''
@@ -56,11 +72,12 @@ def api(method, *args, **kwargs):
 #            raise e
 #    except ValueError, e:
 #        log.warning("ValueError: %s registered while executing method %s with params %s" % (e, method, kwargs))
-#        # sometimes returns this dictionary, sometimes empty response, covered by test "test_empty_result"
+# sometimes returns this dictionary, sometimes empty response, covered by test "test_empty_result"
 #        data = {"error_code":1,"error_msg":"An unknown error occurred"}
 #        return None
     except Exception, e:
-        log.error("Unhandled error: %s registered while executing method %s with params args=%s, kwargs=%s" % (e, method, args, kwargs))
+        log.error("Unhandled error: %s registered while executing method %s with params args=%s, kwargs=%s" %
+                  (e, method, args, kwargs))
         raise e
 
 #    if getattr(response, 'error_code', None):
