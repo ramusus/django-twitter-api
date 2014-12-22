@@ -7,13 +7,13 @@ from django.db.models.fields import FieldDoesNotExist
 from django.db.models.related import RelatedObject
 from django.utils import timezone
 from django.utils.translation import ugettext as _
-import fields
 from m2m_history.fields import ManyToManyHistoryField
 import tweepy
 
+from . import fields
+from .api import api_call
 from .decorators import fetch_all
 from .parser import get_replies
-from .utils import api
 
 __all__ = ['User', 'Status', 'TwitterContentError', 'TwitterModel', 'TwitterManager', 'UserManager']
 
@@ -83,7 +83,7 @@ class TwitterManager(models.Manager):
 
     def api_call(self, *args, **kwargs):
         method = kwargs.pop('method')
-        return api(self.methods[method], *args, **kwargs)
+        return api_call(self.methods[method], *args, **kwargs)
 
     def fetch(self, *args, **kwargs):
         '''

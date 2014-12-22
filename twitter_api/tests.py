@@ -1,13 +1,14 @@
 # -*- coding: utf-8 -*-
 from django.test import TestCase
 from django.utils import six
+import mock
 from oauth_tokens.factories import UserCredentialsFactory
 import tweepy
 
+from .api import api_call, TwitterApi, TwitterError
 from .factories import UserFactory, StatusFactory
 from .models import User, Status
 from .parser import get_replies
-from .utils import api
 
 STATUS_ID = 327926550815207424
 USER_ID = 813286
@@ -20,13 +21,22 @@ STATUS_MANY_RETWEETS_ID = 329231054282055680
 
 class TwitterApiTest(TestCase):
 
+    def test_request_error(self):
+
+        with self.assertRaises(TwitterError):
+            response = api_call('get_status')
+
+    def test_api_instance_singleton(self):
+
+        self.assertEqual(id(TwitterApi()), id(TwitterApi()))
+
     def test_request(self):
 
-        response = api('get_status', STATUS_ID)
+        response = api_call('get_status', STATUS_ID)
         self.assertEqual(response.text, '@mrshoranweyhey Thanks for the love! How about a follow for a follow? :) ^LF')
         self.assertEqual(response.source_url, 'http://www.exacttarget.com/social')
 
-        response = api('get_user', USER_SCREEN_NAME)
+        response = api_call('get_user', USER_SCREEN_NAME)
         self.assertEqual(response.id, USER_ID)
         self.assertEqual(response.name, 'Barack Obama')
 
