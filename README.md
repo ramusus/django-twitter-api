@@ -13,6 +13,7 @@ Add into `settings.py` lines:
     INSTALLED_APPS = (
         ...
         'oauth_tokens',
+        'm2m_history',
         'taggit',
         'twitter_api',
     )
@@ -23,17 +24,6 @@ Add into `settings.py` lines:
     OAUTH_TOKENS_TWITTER_CLIENT_SECRET = ''                            # application secret key
     OAUTH_TOKENS_TWITTER_USERNAME = ''                                 # user login
     OAUTH_TOKENS_TWITTER_PASSWORD = ''                                 # user password
-
-    # twitter-api settings
-    def twitter_api_get_token_callback():
-        import tweepy
-        auth = tweepy.OAuthHandler(OAUTH_TOKENS_TWITTER_CLIENT_ID, OAUTH_TOKENS_TWITTER_CLIENT_SECRET)
-        auth.username = ''                                              # username
-        auth.access_token = tweepy.oauth.OAuthToken('', '')             # pair of access tokens
-        auth.request_token = tweepy.oauth.OAuthToken('', '')            # pair of request tokens
-        return auth
-
-    TWITTER_API_ACCESS_TOKEN_CALLBACK = twitter_api_get_token_callback
 
 ## Usage examples
 
@@ -51,7 +41,7 @@ Add into `settings.py` lines:
 
 ### Fetch status by ID
 
-    >>> from models import Status
+    >>> from twitter_api.models import Status
     >>> status = Status.remote.fetch(327926550815207424)
     >>> status
     <Status: Coca-Cola: @mrshoranweyhey Thanks for the love! How about a follow for a follow? :) ^LF>
@@ -60,7 +50,7 @@ Add into `settings.py` lines:
 
 ### Fetch user by ID and user name
 
-    >>> from models import User
+    >>> from twitter_api.models import User
     >>> User.remote.fetch(813286)
     <User: Barack Obama>
     >>> User.remote.fetch('BarackObama')
@@ -78,17 +68,29 @@ Add into `settings.py` lines:
 
 ### Fetch followers of user
 
-    >>> from models import User
+    >>> from twitter_api.models import User
     >>> user = User.remote.fetch(813286)
     >>> user.fetch_followers(all=True)
     [<User: Raymonde Haris>, <User: Dark king>, <User: Byby_Cuachaa>, '...(remaining elements truncated)...']
 
 ### Fetch retweets of status
 
-    >>> from models import Status
+    >>> from twitter_api.models import Status
     >>> status = Status.remote.fetch(329231054282055680)
     >>> status.fetch_retweets()
     [<Status: Alexandr: RT @Tele2Russia: Друзья, мы представляем вам новую услугу «Везде ноль» http://t.co/lDT1wmnhUU>,
      <Status: Andrew Boriskin: RT @Tele2Russia: Друзья, мы представляем вам новую услугу «Везде ноль» http://t.co/lDT1wmnhUU>,
      <Status: Денис Цуканов: RT @Tele2Russia: Друзья, мы представляем вам новую услугу «Везде ноль» http://t.co/lDT1wmnhUU>,
      ...]
+
+### Fetch replies of status
+
+    >>> from twitter_api.models import Status
+    >>> status = Status.remote.fetch(536859483851735040)
+    >>> status.fetch_replies()
+    [<Status: Cho: @interfax_news Правильно! Жги, Серёга!!!!>,
+    <Status: Татьяна Анисимова: @interfax_news пир во время чумы,стыдно господа!>,
+    <Status: Григорьев Михаил: @interfax_news eobot.com/user/84048>,
+    ...]
+    >>> status.replies_count
+    6

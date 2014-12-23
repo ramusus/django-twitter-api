@@ -1,19 +1,19 @@
 # -*- coding: utf-8 -*-
-from datetime import datetime
 import logging
 import re
 
-import dateutil.parser
 from django.db import models
 from django.db.models.fields import FieldDoesNotExist
 from django.db.models.related import RelatedObject
+from django.utils import timezone
 from django.utils.translation import ugettext as _
-import fields
 from m2m_history.fields import ManyToManyHistoryField
 import tweepy
 
+from . import fields
+from .api import api_call
 from .decorators import fetch_all
-from .utils import api
+from .parser import get_replies
 
 __all__ = ['User', 'Status', 'TwitterContentError', 'TwitterModel', 'TwitterManager', 'UserManager']
 
@@ -83,7 +83,7 @@ class TwitterManager(models.Manager):
 
     def api_call(self, *args, **kwargs):
         method = kwargs.pop('method')
-        return api(self.methods[method], *args, **kwargs)
+        return api_call(self.methods[method], *args, **kwargs)
 
     def fetch(self, *args, **kwargs):
         '''
@@ -100,7 +100,7 @@ class TwitterManager(models.Manager):
         Retrieve objects from remote server
         '''
         extra_fields = kwargs.pop('extra_fields', {})
-        extra_fields['fetched'] = datetime.now()
+        extra_fields['fetched'] = timezone.now()
         response = self.api_call(method='get', *args, **kwargs)
 
         return self.parse_response(response, extra_fields)
@@ -153,7 +153,8 @@ class UserManager(TwitterManager):
         # https://dev.twitter.com/docs/api/1.1/get/followers/list
         # in docs default count is 20, but maximum is 200
         if all:
-            # TODO: make optimization: break cursor iteration after getting already existing user and switch to ids REST method
+            # TODO: make optimization: break cursor iteration after getting already
+            # existing user and switch to ids REST method
             user.followers.clear()
             cursor = tweepy.Cursor(user.tweepy._api.followers, id=user.id, count=count)
             for instance in cursor.items():
@@ -183,6 +184,19 @@ class StatusManager(TwitterManager):
         instances = self.parse_response_list(instances)
         ids = [self.get_or_create_from_instance(instance).pk for instance in instances]
         return self.filter(pk__in=ids)
+
+    def fetch_replies(self, status, **kwargs):
+        instances = Status.objects.none()
+
+        replies_ids = get_replies(status)
+        for id in replies_ids:
+            instance = Status.remote.fetch(id)
+            instances |= Status.objects.filter(pk=instance.pk)
+
+        status.replies_count = instances.count()
+        status.save()
+
+        return instances
 
 
 class TwitterModel(models.Model):
@@ -407,6 +421,7 @@ class Status(TwitterBaseModel):
 
     favorites_count = models.PositiveIntegerField()
     retweets_count = models.PositiveIntegerField()
+    replies_count = models.PositiveIntegerField(null=True)
 
     in_reply_to_status = models.ForeignKey('Status', null=True, related_name='replies')
     in_reply_to_user = models.ForeignKey('User', null=True, related_name='replies')
@@ -447,3 +462,6 @@ class Status(TwitterBaseModel):
 
     def fetch_retweets(self, **kwargs):
         return Status.remote.fetch_retweets(status=self, **kwargs)
+
+    def fetch_replies(self, **kwargs):
+        return Status.remote.fetch_replies(status=self, **kwargs)
