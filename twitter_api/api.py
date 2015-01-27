@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from django.conf import settings
 from oauth_tokens.api import ApiAbstractBase, Singleton
 from oauth_tokens.models import AccessToken
@@ -30,18 +32,37 @@ class TwitterApi(ApiAbstractBase):
         try:
             auth.access_token = tweepy.oauth.OAuthToken(token[0], token[1])
         except AttributeError:
-            # dev version
-            auth.access_token = token[0]
-            auth.access_token_secret = token[1]
+            # dev tweepy version
+            auth.access_token, auth.access_token_secret = token
 
         return tweepy.API(auth)
 
     def get_api_response(self, *args, **kwargs):
         return getattr(self.api, self.method)(*args, **kwargs)
 
+    def handle_error_no_active_tokens(self, e, *args, **kwargs):
+        if self.used_access_tokens and self.api:
+            rate_limit_status = self.api.rate_limit_status()
+            method = '/%s' % self.method.replace('_', '/')
+            for key, methods in rate_limit_status['resources'].items():
+                if method in methods:
+                    if methods[method]['remaining'] == 0:
+                        secs = (datetime.fromtimestamp(methods[method]['reset']) - datetime.now()).seconds
+                        self.used_access_tokens = []
+                    return self.sleep_repeat_call(seconds=secs, *args, **kwargs)
+        else:
+            return super(TwitterApi, self).handle_error_no_active_tokens(e, *args, **kwargs)
+
     def handle_error_code(self, e, *args, **kwargs):
         e.code = e[0][0]['code']
         return super(TwitterApi, self).handle_error_code(e, *args, **kwargs)
+
+    def handle_error_code_88(self, e, *args, **kwargs):
+        # Rate limit exceeded
+        token = AccessToken.objects.get_token_class(self.provider).delimeter.join(
+            [self.api.auth.access_token, self.api.auth.access_token_secret])
+        self.used_access_tokens += [token]
+        return self.repeat_call(*args, **kwargs)
 
 #     def handle_error_code_63(self, e, *args, **kwargs):
 # User has been suspended.
