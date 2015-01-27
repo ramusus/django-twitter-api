@@ -1,4 +1,6 @@
 # -*- coding: utf-8 -*-
+import time
+
 from django.test import TestCase
 from django.utils import six
 import mock
@@ -10,6 +12,7 @@ from .factories import UserFactory, StatusFactory
 from .models import User, Status
 from .parser import get_replies
 
+
 STATUS_ID = 327926550815207424
 USER_ID = 813286
 USER_SCREEN_NAME = 'BarackObama'
@@ -20,6 +23,29 @@ STATUS_MANY_RETWEETS_ID = 329231054282055680
 
 
 class TwitterApiTest(TestCase):
+
+    def raise_rate_limit(*a, **kw):
+        raise tweepy.TweepError([{u'message': u'Rate limit exceeded', u'code': 88}])
+
+    def get_rate_limit_status(*a, **kw):
+        return {u'rate_limit_context': {u'access_token': u''},
+                u'resources': {
+                    u'trends': {u'/trends/available': {u'limit': 15,
+                                                       u'remaining': 0,
+                                                       u'reset': time.time() + 100}}}}
+
+    @mock.patch('tweepy.API.trends_available', side_effect=raise_rate_limit)
+    @mock.patch('tweepy.API.rate_limit_status', side_effect=get_rate_limit_status)
+    @mock.patch('twitter_api.api.TwitterApi.sleep_repeat_call')
+    def test_rate_limit(self, sleep, rate_limit_status, trends_available):
+
+        api_call('trends_available')
+
+        self.assertTrue(trends_available.called)
+        self.assertTrue(rate_limit_status.called)
+        self.assertTrue(sleep.called)
+        self.assertEqual(sleep.call_count, 1)
+        self.assertGreater(sleep.call_args_list[0], 98)
 
     def test_request_error(self):
 
