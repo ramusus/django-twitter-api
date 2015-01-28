@@ -81,9 +81,10 @@ class TwitterManager(models.Manager):
 #
 #        return self.get_or_create_from_instance(instance)
 
-    def api_call(self, *args, **kwargs):
-        method = kwargs.pop('method')
-        return api_call(self.methods[method], *args, **kwargs)
+    def api_call(self, method, *args, **kwargs):
+        if method in self.methods:
+            method = self.methods[method]
+        return api_call(method, *args, **kwargs)
 
     def fetch(self, *args, **kwargs):
         '''
@@ -101,7 +102,7 @@ class TwitterManager(models.Manager):
         '''
         extra_fields = kwargs.pop('extra_fields', {})
         extra_fields['fetched'] = timezone.now()
-        response = self.api_call(method='get', *args, **kwargs)
+        response = self.api_call('get', *args, **kwargs)
 
         return self.parse_response(response, extra_fields)
 
@@ -144,7 +145,7 @@ class UserManager(TwitterManager):
     def get_followers_ids_for_user(self, user, all=False, count=5000, **kwargs):
         # https://dev.twitter.com/docs/api/1.1/get/followers/ids
         if all:
-            cursor = tweepy.Cursor(user.tweepy._api.followers_ids, id=user.id, count=count)
+            cursor = tweepy.Cursor(user.tweepy._api.followers_ids, id=user.pk, count=count)
             return list(cursor.items())
         else:
             raise NotImplementedError("This method implemented only with argument all=True")
@@ -156,7 +157,7 @@ class UserManager(TwitterManager):
             # TODO: make optimization: break cursor iteration after getting already
             # existing user and switch to ids REST method
             user.followers.clear()
-            cursor = tweepy.Cursor(user.tweepy._api.followers, id=user.id, count=count)
+            cursor = tweepy.Cursor(user.tweepy._api.followers, id=user.pk, count=count)
             for instance in cursor.items():
                 instance = self.parse_response_object(instance)
                 instance = self.get_or_create_from_instance(instance)
@@ -171,16 +172,14 @@ class StatusManager(TwitterManager):
     @fetch_all(max_count=200)
     def fetch_for_user(self, user, count=20, **kwargs):
         # https://dev.twitter.com/docs/api/1.1/get/statuses/user_timeline
-        instances = user.tweepy.timeline(count=count, **kwargs)
-        instances = self.parse_response_list(instances, {'user_id': user.id})
+        instances = self.api_call('user_timeline', id=user.pk, count=count, **kwargs)
+        instances = self.parse_response_list(instances, {'user_id': user.pk})
         ids = [self.get_or_create_from_instance(instance).pk for instance in instances]
         return self.filter(pk__in=ids)
 
     def fetch_retweets(self, status, count=100, **kwargs):
         # https://dev.twitter.com/docs/api/1.1/get/statuses/retweets/%3Aid
-        # TODO: tweepy 2.1 doesn't support 'count' argument, but API does
-        #kwargs['count'] = count
-        instances = status.tweepy.retweets(**kwargs)
+        instances = self.api_call('retweets', id=status.pk, count=count, **kwargs)
         instances = self.parse_response_list(instances)
         ids = [self.get_or_create_from_instance(instance).pk for instance in instances]
         return self.filter(pk__in=ids)
@@ -244,7 +243,7 @@ class TwitterModel(models.Model):
         Substitute new user with old one while updating in method Manager.get_or_create_from_instance()
         Can be overrided in child models
         '''
-        self.id = old_instance.id
+        self.pk = old_instance.pk
 
     def parse(self):
         '''
@@ -322,7 +321,7 @@ class TwitterBaseModel(TwitterModel):
     def tweepy(self):
         if not self._tweepy_model:
             # get fresh instance with the same ID, set tweepy object and refresh attributes
-            instance = self.__class__.remote.get(self.id)
+            instance = self.__class__.remote.get(self.pk)
             self.set_tweepy(instance.tweepy)
             self.parse()
         return self._tweepy_model
@@ -445,7 +444,7 @@ class Status(TwitterBaseModel):
 
     @property
     def slug(self):
-        return '/%s/status/%d' % (self.author.screen_name, self.id)
+        return '/%s/status/%d' % (self.author.screen_name, self.pk)
 
     def parse(self):
         self._response['favorites_count'] = self._response.pop('favorite_count', 0)
