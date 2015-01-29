@@ -107,7 +107,9 @@ class TwitterManager(models.Manager):
         return self.parse_response(response, extra_fields)
 
     def parse_response(self, response, extra_fields=None):
-        if isinstance(response, (list, tuple)):
+        if response is None:
+            return []
+        elif isinstance(response, (list, tuple)):
             return self.parse_response_list(response, extra_fields)
         elif isinstance(response, tweepy.models.Model):
             return self.parse_response_object(response, extra_fields)
@@ -172,15 +174,15 @@ class StatusManager(TwitterManager):
     @fetch_all(max_count=200)
     def fetch_for_user(self, user, count=20, **kwargs):
         # https://dev.twitter.com/docs/api/1.1/get/statuses/user_timeline
-        instances = self.api_call('user_timeline', id=user.pk, count=count, **kwargs)
-        instances = self.parse_response_list(instances, {'user_id': user.pk})
+        response = self.api_call('user_timeline', id=user.pk, count=count, **kwargs)
+        instances = self.parse_response(response, {'user_id': user.pk})
         ids = [self.get_or_create_from_instance(instance).pk for instance in instances]
         return self.filter(pk__in=ids)
 
     def fetch_retweets(self, status, count=100, **kwargs):
         # https://dev.twitter.com/docs/api/1.1/get/statuses/retweets/%3Aid
-        instances = self.api_call('retweets', id=status.pk, count=count, **kwargs)
-        instances = self.parse_response_list(instances)
+        response = self.api_call('retweets', id=status.pk, count=count, **kwargs)
+        instances = self.parse_response(response)
         ids = [self.get_or_create_from_instance(instance).pk for instance in instances]
         return self.filter(pk__in=ids)
 
