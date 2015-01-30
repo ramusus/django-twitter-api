@@ -42,14 +42,26 @@ class TwitterApi(ApiAbstractBase):
 
     def handle_error_no_active_tokens(self, e, *args, **kwargs):
         if self.used_access_tokens and self.api:
-            rate_limit_status = self.api.rate_limit_status()
+
+            # check if all tokens are blocked by rate limits response
+            try:
+                rate_limit_status = self.api.rate_limit_status()
+            except self.error_class, e:
+                # handle rate limit on rate_limit_status request -> wait 15 min and repeat main request
+                if e[0][0]['code'] == 88:
+                    self.used_access_tokens = []
+                    return self.sleep_repeat_call(seconds=60 * 15, *args, **kwargs)
+                else:
+                    raise
+
             method = '/%s' % self.method.replace('_', '/')
-            for key, methods in rate_limit_status['resources'].items():
-                if method in methods:
-                    if methods[method]['remaining'] == 0:
-                        secs = (datetime.fromtimestamp(methods[method]['reset']) - datetime.now()).seconds
-                        self.used_access_tokens = []
-                    return self.sleep_repeat_call(seconds=secs, *args, **kwargs)
+            status = [methods for methods in rate_limit_status['resources'].values() if method in methods][0][method]
+            if status['remaining'] == 0:
+                secs = (datetime.fromtimestamp(status['reset']) - datetime.now()).seconds
+                self.used_access_tokens = []
+                return self.sleep_repeat_call(seconds=secs, *args, **kwargs)
+            else:
+                return self.repeat_call(*args, **kwargs)
         else:
             return super(TwitterApi, self).handle_error_no_active_tokens(e, *args, **kwargs)
 
