@@ -107,9 +107,10 @@ class TwitterManager(models.Manager):
         return self.parse_response(response, extra_fields)
 
     def parse_response(self, response, extra_fields=None):
-        if response is None:
-            return []
-        elif isinstance(response, (list, tuple)):
+        # if response is None:
+        #     return []
+        # el
+        if isinstance(response, (list, tuple)):
             return self.parse_response_list(response, extra_fields)
         elif isinstance(response, tweepy.models.Model):
             return self.parse_response_object(response, extra_fields)
