@@ -27,7 +27,7 @@ class TwitterApi(ApiAbstractBase):
 
         delimeter = AccessToken.objects.get_token_class(self.provider).delimeter
         auth = tweepy.OAuthHandler(TWITTER_CLIENT_ID, TWITTER_CLIENT_SECRET)
-        auth.set_access_token(**token.split(delimeter))
+        auth.set_access_token(*token.split(delimeter))
 
         return tweepy.API(auth, wait_on_rate_limit=True, retry_count=3, retry_delay=1, retry_errors=set([401, 404, 500, 503]))
 
