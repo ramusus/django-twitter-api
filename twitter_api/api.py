@@ -27,15 +27,9 @@ class TwitterApi(ApiAbstractBase):
 
         delimeter = AccessToken.objects.get_token_class(self.provider).delimeter
         auth = tweepy.OAuthHandler(TWITTER_CLIENT_ID, TWITTER_CLIENT_SECRET)
+        auth.set_access_token(**token.split(delimeter))
 
-        token = token.split(delimeter)
-        try:
-            auth.access_token = tweepy.oauth.OAuthToken(token[0], token[1])
-        except AttributeError:
-            # dev tweepy version
-            auth.access_token, auth.access_token_secret = token
-
-        return tweepy.API(auth)
+        return tweepy.API(auth, wait_on_rate_limit=True, retry_count=3, retry_delay=1, retry_errors=set([401, 404, 500, 503]))
 
     def get_api_response(self, *args, **kwargs):
         return getattr(self.api, self.method)(*args, **kwargs)
@@ -54,6 +48,7 @@ class TwitterApi(ApiAbstractBase):
                 else:
                     raise
 
+            # TODO: wrong logic, path is different completelly sometimes
             method = '/%s' % self.method.replace('_', '/')
             status = [methods for methods in rate_limit_status['resources'].values() if method in methods][0][method]
             if status['remaining'] == 0:
