@@ -34,6 +34,9 @@ class TwitterApi(ApiAbstractBase):
     def get_api_response(self, *args, **kwargs):
         return getattr(self.api, self.method)(*args, **kwargs)
 
+    def get_error_code(self, e):
+        e.code = e[0][0]['code'] if 'code' in e[0][0] else 0
+
     def handle_error_no_active_tokens(self, e, *args, **kwargs):
         if self.used_access_tokens and self.api:
 
@@ -41,8 +44,9 @@ class TwitterApi(ApiAbstractBase):
             try:
                 rate_limit_status = self.api.rate_limit_status()
             except self.error_class, e:
+                self.get_error_code(e)
                 # handle rate limit on rate_limit_status request -> wait 15 min and repeat main request
-                if e[0][0]['code'] == 88:
+                if e.code == 88:
                     self.used_access_tokens = []
                     return self.sleep_repeat_call(seconds=60 * 15, *args, **kwargs)
                 else:
@@ -61,7 +65,7 @@ class TwitterApi(ApiAbstractBase):
             return super(TwitterApi, self).handle_error_no_active_tokens(e, *args, **kwargs)
 
     def handle_error_code(self, e, *args, **kwargs):
-        e.code = e[0][0]['code']
+        self.get_error_code(e)
         return super(TwitterApi, self).handle_error_code(e, *args, **kwargs)
 
     def handle_error_code_88(self, e, *args, **kwargs):
