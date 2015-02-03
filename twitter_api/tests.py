@@ -47,6 +47,19 @@ class TwitterApiTest(TestCase):
         self.assertEqual(sleep.call_count, 1)
         self.assertGreater(sleep.call_args_list[0], 98)
 
+    def test_user_screen_name_unique(self):
+
+        # created user with unexisting pk
+        user_wrong = UserFactory(pk=102732226, screen_name=USER_SCREEN_NAME)
+
+        self.assertEqual(User.objects.count(), 1)
+        self.assertEqual(User.objects.filter(pk=user_wrong.pk).count(), 1)
+
+        user = User.remote.fetch(USER_SCREEN_NAME)
+
+        self.assertEqual(User.objects.count(), 1)
+        self.assertEqual(User.objects.filter(pk=user.pk).count(), 1)
+
     def test_request_error(self):
 
         with self.assertRaises(TwitterError):

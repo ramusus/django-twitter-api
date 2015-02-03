@@ -11,7 +11,7 @@ from m2m_history.fields import ManyToManyHistoryField
 import tweepy
 
 from . import fields
-from .api import api_call
+from .api import api_call, TwitterError
 from .decorators import fetch_all
 from .parser import get_replies
 
@@ -169,6 +169,25 @@ class UserManager(TwitterManager):
             raise NotImplementedError("This method implemented only with argument all=True")
         return user.followers.all()
 
+    def get_or_create_from_instance(self, instance):
+        try:
+            instance_old = self.model.objects.get(screen_name=instance.screen_name)
+            if instance_old.pk == instance.pk:
+                instance.save()
+            else:
+                # perhaps we already have old User with the same screen_name, but different id
+                try:
+                    self.fetch(instance_old.pk)
+                except TwitterError, e:
+                    if e.code == 34:
+                        instance_old.delete()
+                        instance.save()
+                    else:
+                        raise
+            return instance
+        except self.model.DoesNotExist:
+            return super(UserManager, self).get_or_create_from_instance(instance)
+
 
 class StatusManager(TwitterManager):
 
@@ -222,7 +241,6 @@ class TwitterModel(models.Model):
         '''
         for field, instance in self._foreignkeys_pre_save:
             instance = instance.__class__.remote.get_or_create_from_instance(instance)
-            instance.save()
             setattr(self, field, instance)
         self._foreignkeys_pre_save = []
 
