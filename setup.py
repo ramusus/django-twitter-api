@@ -1,6 +1,6 @@
 import re
 
-from setuptools import setup, find_packages
+from setuptools import find_packages, setup
 
 setup(
     name='django-twitter-api',
@@ -21,7 +21,7 @@ setup(
         'django-picklefield',
         'django-m2m-history',
         'django-oauth-tokens>=0.4.10',
-        'django-m2m-history>=0.1.2',
+        'django-m2m-history>=0.2.0',
         'tweepy',
     ],
     classifiers=[
