@@ -2,16 +2,16 @@
 import logging
 import re
 
+import tweepy
 from django.db import models
 from django.db.models.fields import FieldDoesNotExist
 from django.db.models.related import RelatedObject
 from django.utils import timezone
 from django.utils.translation import ugettext as _
 from m2m_history.fields import ManyToManyHistoryField
-import tweepy
 
 from . import fields
-from .api import api_call, TwitterError
+from .api import TwitterError, api_call
 from .decorators import fetch_all
 from .parser import get_replies
 
@@ -397,7 +397,7 @@ class User(TwitterBaseModel):
     statuses_count = models.PositiveIntegerField()
     utc_offset = models.IntegerField(null=True)
 
-    followers = ManyToManyHistoryField('User', cache=True)
+    followers = ManyToManyHistoryField('User', versions=True)
 
     objects = models.Manager()
     remote = UserManager(methods={
