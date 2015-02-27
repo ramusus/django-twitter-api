@@ -22,13 +22,10 @@ class TwitterApi(ApiAbstractBase):
     def get_consistent_token(self):
         return getattr(settings, 'TWITTER_API_ACCESS_TOKEN', None)
 
-    def get_api(self, **kwargs):
-        token = self.get_token(**kwargs)
-
+    def get_api(self, token):
         delimeter = AccessToken.objects.get_token_class(self.provider).delimeter
         auth = tweepy.OAuthHandler(TWITTER_CLIENT_ID, TWITTER_CLIENT_SECRET)
         auth.set_access_token(*token.split(delimeter))
-
         return tweepy.API(auth, wait_on_rate_limit=True, retry_count=3, retry_delay=1, retry_errors=set([401, 404, 500, 503]))
 
     def get_api_response(self, *args, **kwargs):

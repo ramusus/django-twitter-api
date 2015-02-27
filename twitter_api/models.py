@@ -59,7 +59,6 @@ class TwitterManager(models.Manager):
         return self.model.remote.fetch(slug)
 
     def get_or_create_from_instance(self, instance):
-
         remote_pk_dict = {}
         for field_name in self.remote_pk:
             remote_pk_dict[field_name] = getattr(instance, field_name)
@@ -172,7 +171,7 @@ class UserManager(TwitterManager):
     def get_or_create_from_instance(self, instance):
         try:
             instance_old = self.model.objects.get(screen_name=instance.screen_name)
-            if instance_old.pk == instance.pk:
+            if instance_old.id == instance.id:
                 instance.save()
             else:
                 # perhaps we already have old User with the same screen_name, but different id
