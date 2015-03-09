@@ -29,7 +29,7 @@ def get_replies(status):
         ids = IDS_RE.findall(response['items_html'])
         ids_list += ids
 
-        if response['has_more_items']:
+        if response['has_more_items'] and len(ids):
             params = {'max_position': ids.pop()}
         else:
             break
