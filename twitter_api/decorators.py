@@ -32,7 +32,7 @@ def fetch_all(func, max_count):
     """
     def wrapper(self, all=False, return_instances=None, *args, **kwargs):
         if all:
-            if not return_instances:
+            if return_instances is None:
                 return_instances = []
             kwargs['count'] = max_count
             instances = func(self, *args, **kwargs)
