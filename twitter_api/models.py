@@ -64,8 +64,8 @@ class TwitterManager(models.Manager):
             remote_pk_dict[field_name] = getattr(instance, field_name)
 
         try:
-            old_instance = self.model.objects.get(**remote_pk_dict)
-            instance._substitute(old_instance)
+            instance_old = self.model.objects.get(**remote_pk_dict)
+            instance._substitute(instance_old)
             instance.save()
         except self.model.DoesNotExist:
             instance.save()
@@ -172,6 +172,7 @@ class UserManager(TwitterManager):
         try:
             instance_old = self.model.objects.get(screen_name=instance.screen_name)
             if instance_old.id == instance.id:
+                instance._substitute(instance_old)
                 instance.save()
             else:
                 # perhaps we already have old User with the same screen_name, but different id
@@ -179,6 +180,7 @@ class UserManager(TwitterManager):
                     self.fetch(instance_old.pk)
                 except TwitterError, e:
                     if e.code == 34:
+                        instance._substitute(instance_old)
                         instance_old.delete()
                         instance.save()
                     else:
