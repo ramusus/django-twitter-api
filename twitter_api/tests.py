@@ -189,6 +189,7 @@ class TwitterApiTest(TestCase):
         status = Status.remote.fetch(STATUS_MANY_REPLIES_ID)
 
         self.assertEqual(Status.objects.count(), 1)
+        self.assertEqual(status.replies_count, None)
 
         replies = status.fetch_replies()
 

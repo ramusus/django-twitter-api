@@ -468,6 +468,10 @@ class Status(TwitterBaseModel):
     def slug(self):
         return '/%s/status/%d' % (self.author.screen_name, self.pk)
 
+    def _substitute(self, old_instance):
+        super(Status, self)._substitute(old_instance)
+        self.replies_count = old_instance.replies_count
+
     def parse(self):
         self._response['favorites_count'] = self._response.pop('favorite_count', 0)
         self._response['retweets_count'] = self._response.pop('retweet_count', 0)
