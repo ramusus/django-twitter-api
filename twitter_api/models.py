@@ -245,7 +245,11 @@ class TwitterModel(models.Model):
             setattr(self, field, instance)
         self._foreignkeys_pre_save = []
 
-        super(TwitterModel, self).save(*args, **kwargs)
+        try:
+            super(TwitterModel, self).save(*args, **kwargs)
+        except Exception as e:
+            import sys
+            raise type(e), type(e)(e.message + ' while saving %s' % self.__dict__), sys.exc_info()[2]
 
         for field, instance in self._external_links_post_save:
             # set foreignkey to the main instance

@@ -33,6 +33,7 @@ class StatusFactory(factory.DjangoModelFactory):
     author = factory.SubFactory(UserFactory)
     favorites_count = factory.LazyAttribute(lambda o: random.randint(0, 1000))
     retweets_count = factory.LazyAttribute(lambda o: random.randint(0, 1000))
+    replies_count = factory.LazyAttribute(lambda o: random.randint(0, 1000))
 
     class Meta:
         model = models.Status
