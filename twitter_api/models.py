@@ -343,6 +343,11 @@ class TwitterBaseModel(TwitterModel):
         self._tweepy_model = model
         self._response = dict(self._tweepy_model.__dict__)
 
+    def save(self, *args, **kwargs):
+        if len(self.lang) > 10:
+            self.lang = ''
+        super(TwitterBaseModel, self).save(*args, **kwargs)
+
     @property
     def tweepy(self):
         if not self._tweepy_model:
