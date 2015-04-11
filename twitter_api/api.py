@@ -67,15 +67,17 @@ class TwitterApi(ApiAbstractBase):
 
     def handle_error_code_88(self, e, *args, **kwargs):
         # Rate limit exceeded
+        self.logger.warning("Rate limit exceeded: %s, method: %s recursion count: %d" %
+                            (e, self.method, self.recursion_count))
         token = AccessToken.objects.get_token_class(self.provider).delimeter.join(
             [self.api.auth.access_token, self.api.auth.access_token_secret])
         self.used_access_tokens += [token]
         return self.repeat_call(*args, **kwargs)
 
-#     def handle_error_code_63(self, e, *args, **kwargs):
-# User has been suspended.
-#         self.refresh_tokens()
-#         return self.repeat_call(*args, **kwargs)
+    # def handle_error_code_63(self, e, *args, **kwargs):
+    #     # User has been suspended.
+    #     self.refresh_tokens()
+    #     return self.repeat_call(*args, **kwargs)
 
 
 def api_call(*args, **kwargs):
