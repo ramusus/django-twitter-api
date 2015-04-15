@@ -87,6 +87,12 @@ class TwitterApiTest(TestCase):
         self.assertIsInstance(instance.tweepy, tweepy.models.User)
         self.assertEqual(instance.tweepy.id_str, str(USER_ID))
 
+    def test_fetch_negative_friends_count(self):
+
+        user = User.remote.fetch(961050745)
+        # problem with saving User id = 2577412818
+        user.fetch_statuses(count=100)
+
     def test_fetch_status(self):
 
         self.assertEqual(Status.objects.count(), 0)

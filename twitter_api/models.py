@@ -417,6 +417,12 @@ class User(TwitterBaseModel):
     def __unicode__(self):
         return self.name
 
+    def save(self, *args, **kwargs):
+        if self.friends_count < 0:
+            log.warning('Negative value friends_count=%s set to 0 for user ID %s' % (self.friends_count, self.id))
+            self.friends_count = 0
+        super(User, self).save(*args, **kwargs)
+
     @property
     def slug(self):
         return self.screen_name
