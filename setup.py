@@ -20,7 +20,7 @@ setup(
         'django-annoying',
         'django-picklefield',
         'django-m2m-history',
-        'django-oauth-tokens>=0.5.0',
+        'django-oauth-tokens>=0.5.1',
         'django-m2m-history>=0.2.0',
         'tweepy',
     ],
