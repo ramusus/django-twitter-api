@@ -11,6 +11,12 @@ __all__ = ['api_call', 'TwitterError']
 TWITTER_CLIENT_ID = getattr(settings, 'OAUTH_TOKENS_TWITTER_CLIENT_ID', None)
 TWITTER_CLIENT_SECRET = getattr(settings, 'OAUTH_TOKENS_TWITTER_CLIENT_SECRET', None)
 
+@property
+def code(self):
+    return self[0][0]['code'] if 'code' in self[0][0] else 0
+
+TwitterError.code = code
+
 
 class TwitterApi(ApiAbstractBase):
 
@@ -33,9 +39,6 @@ class TwitterApi(ApiAbstractBase):
 
     def get_api_response(self, *args, **kwargs):
         return getattr(self.api, self.method)(*args, **kwargs)
-
-    def get_error_code(self, e):
-        return e[0][0]['code'] if 'code' in e[0][0] else 0
 
     def handle_error_no_active_tokens(self, e, *args, **kwargs):
         if self.used_access_tokens and self.api:
