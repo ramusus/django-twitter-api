@@ -22,9 +22,10 @@ def get_replies(status):
 
     ar = AccessToken.objects.get_token('twitter').auth_request
 
-    while 1:
+    while True:
         r = ar.authorized_request(url=url, params=params, headers=headers)
         response = r.json()
+        response = response['descendants']
 
         ids = IDS_RE.findall(response['items_html'])
         ids_list += ids
