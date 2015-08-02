@@ -41,15 +41,6 @@ class TwitterApi(ApiAbstractBase):
     def get_api_response(self, *args, **kwargs):
         return getattr(self.api, self.method)(*args, **kwargs)
 
-    def log_and_raise(self, e, *args, **kwargs):
-        self.logger.error("Error '%s'. Method %s, args: %s, kwargs: %s, recursion count: %d" % (
-            e, self.method, args, kwargs, self.recursion_count))
-        error_class = type(e)
-        e.message[0]['message'] = '%s while executing method %s with args %s, kwargs %s' % (
-            e.message[0]['message'], self.method, args, kwargs)
-        error = error_class(e.message)
-        raise error_class, error, sys.exc_info()[2]
-
     def handle_error_no_active_tokens(self, e, *args, **kwargs):
         if self.used_access_tokens and self.api:
 
