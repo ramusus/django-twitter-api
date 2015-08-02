@@ -31,7 +31,7 @@ def get_replies(status):
         ids_list += ids
 
         if response['has_more_items'] and len(ids):
-            params = {'max_position': ids.pop()}
+            params = {'max_position': response['min_position']}
         else:
             break
 

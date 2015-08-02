@@ -1,5 +1,7 @@
 # -*- coding: utf-8 -*-
 from django.utils.functional import wraps
+from django.db.models import Min
+
 
 def opt_arguments(func):
     '''
@@ -37,11 +39,11 @@ def fetch_all(func, max_count):
             kwargs['count'] = max_count
             instances = func(self, *args, **kwargs)
             instances_count = len(instances)
+            min_id = instances.aggregate(minid=Min('id'))['minid']
             return_instances += instances
 
             if instances_count > 1:
-                # TODO: make protection somehow from endless loop
-                kwargs['max_id'] = instances[instances_count-1].id
+                kwargs['max_id'] = min_id
                 return wrapper(self, all=True, return_instances=return_instances, *args, **kwargs)
             else:
                 return self.model.objects.filter(id__in=[instance.id for instance in return_instances])
