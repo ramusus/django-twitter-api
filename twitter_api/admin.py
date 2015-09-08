@@ -17,6 +17,7 @@ class StatusAdmin(TwitterModelAdmin):
 
 class UserAdmin(TwitterModelAdmin):
     exclude = ('followers',)
+    search_fields = ('name', 'screen_name')
 
 
 admin.site.register(Status, StatusAdmin)

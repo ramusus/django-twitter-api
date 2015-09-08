@@ -163,6 +163,8 @@ class UserManager(TwitterManager):
             for instance in cursor.items():
                 instance = self.parse_response_object(instance)
                 instance = self.get_or_create_from_instance(instance)
+                # TODO: NOT USE .add method for users, because of ManyToManyHistoryField
+                # TODO: handle first version in right way - empty time_from field.
                 user.followers.add(instance)
         else:
             raise NotImplementedError("This method implemented only with argument all=True")
