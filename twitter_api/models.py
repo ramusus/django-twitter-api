@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 import logging
 import re
+import collections
+from datetime import datetime
 
 import tweepy
 from django.db import models
@@ -14,6 +16,12 @@ from . import fields
 from .api import TwitterError, api_call
 from .decorators import fetch_all
 from .parser import get_replies
+
+try:
+    from django.db.transaction import atomic
+except ImportError:
+    from django.db.transaction import commit_on_success as atomic
+
 
 __all__ = ['User', 'Status', 'TwitterContentError', 'TwitterModel', 'TwitterManager', 'UserManager']
 
@@ -90,8 +98,8 @@ class TwitterManager(models.Manager):
         Retrieve and save object to local DB
         '''
         result = self.get(*args, **kwargs)
-        if isinstance(result, list):
-            return [self.get_or_create_from_instance(instance) for instance in result]
+        if isinstance(result, collections.Iterable):
+            return self.filter(pk__in=[self.get_or_create_from_instance(instance).pk for instance in result])
         else:
             return self.get_or_create_from_instance(result)
 
@@ -99,9 +107,10 @@ class TwitterManager(models.Manager):
         '''
         Retrieve objects from remote server
         '''
+        method = kwargs.pop('method', 'get')
         extra_fields = kwargs.pop('extra_fields', {})
         extra_fields['fetched'] = timezone.now()
-        response = self.api_call('get', *args, **kwargs)
+        response = self.api_call(method, *args, **kwargs)
 
         return self.parse_response(response, extra_fields)
 
@@ -137,6 +146,60 @@ class TwitterManager(models.Manager):
                 continue
 
             instance = self.parse_response_object(response, extra_fields)
+            instances += [instance]
+
+        return instances
+
+
+class TwitterTimelineManager(TwitterManager):
+
+    '''
+    Manager class, child of OdnoklassnikiManager for fetching objects with arguments `after`, `before`
+    '''
+    timeline_cut_fieldname = 'created_at'
+    timeline_force_ordering = True
+
+    def get_timeline_date(self, instance):
+        return getattr(instance, self.timeline_cut_fieldname, datetime(1970, 1, 1).replace(tzinfo=timezone.utc))
+
+    @atomic
+    def get(self, *args, **kwargs):
+        '''
+        Retrieve objects and return result list with respect to parameters:
+         * 'after' - excluding all items before.
+         * 'before' - excluding all items after.
+        '''
+        after = kwargs.pop('after', None)
+        before = kwargs.pop('before', None)
+
+        if before and not after:
+            raise ValueError("Attribute `before` should be specified with attribute `after`")
+        if before and before < after:
+            raise ValueError("Attribute `before` should be later, than attribute `after`")
+
+        result = super(TwitterTimelineManager, self).get(*args, **kwargs)
+        if not isinstance(result, collections.Iterable):
+            return result
+
+        if self.timeline_force_ordering and result:
+            result.sort(key=self.get_timeline_date, reverse=True)
+
+        instances = []
+        for instance in result:
+
+            timeline_date = self.get_timeline_date(instance)
+
+            if timeline_date and isinstance(timeline_date, datetime):
+
+                try:
+                    if after and after > timeline_date:
+                        break
+                except:
+                    import ipdb; ipdb.set_trace()
+
+                if before and before < timeline_date:
+                    continue
+
             instances += [instance]
 
         return instances
@@ -192,22 +255,21 @@ class UserManager(TwitterManager):
             return super(UserManager, self).get_or_create_from_instance(instance)
 
 
-class StatusManager(TwitterManager):
+class StatusManager(TwitterTimelineManager):
 
     @fetch_all(max_count=200)
     def fetch_for_user(self, user, count=20, **kwargs):
         # https://dev.twitter.com/docs/api/1.1/get/statuses/user_timeline
-        response = self.api_call('user_timeline', id=user.pk, count=count, **kwargs)
-        instances = self.parse_response(response, {'user_id': user.pk})
-        ids = [self.get_or_create_from_instance(instance).pk for instance in instances]
-        return self.filter(pk__in=ids)
+        kwargs['extra_fields'] = {'user_id': user.pk}
+        kwargs['count'] = count
+        kwargs['id'] = user.pk
+        return self.fetch(method='user_timeline', **kwargs)
 
     def fetch_retweets(self, status, count=100, **kwargs):
         # https://dev.twitter.com/docs/api/1.1/get/statuses/retweets/%3Aid
-        response = self.api_call('retweets', id=status.pk, count=count, **kwargs)
-        instances = self.parse_response(response)
-        ids = [self.get_or_create_from_instance(instance).pk for instance in instances]
-        return self.filter(pk__in=ids)
+        kwargs['count'] = count
+        kwargs['id'] = status.pk
+        return self.fetch(method='retweets', **kwargs)
 
     def fetch_replies(self, status, **kwargs):
         instances = Status.objects.none()
@@ -307,6 +369,9 @@ class TwitterModel(models.Model):
                 elif isinstance(field, (models.CharField, models.TextField)) and value:
                     if isinstance(value, (str, unicode)):
                         value = value.strip()
+
+                elif isinstance(field, (models.DateTimeField)):
+                    value = value.replace(tzinfo=timezone.utc)
 
                 setattr(self, key, value)
 

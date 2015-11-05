@@ -1,8 +1,10 @@
 # -*- coding: utf-8 -*-
 import time
+from datetime import datetime, timedelta
 
 from django.test import TestCase
-from django.utils import six
+from django.utils import six, timezone
+from django.utils.timezone import is_aware
 import mock
 from oauth_tokens.factories import UserCredentialsFactory
 import tweepy
@@ -109,6 +111,8 @@ class TwitterApiTest(TestCase):
         self.assertEqual(instance.in_reply_to_user_id, 1323314442)
         self.assertEqual(instance.in_reply_to_status, Status.objects.get(id=327912852486762497))
         self.assertEqual(instance.in_reply_to_user, User.objects.get(id=1323314442))
+        self.assertIsInstance(instance.created_at, datetime)
+        self.assertTrue(is_aware(instance.created_at))
 
     def test_fetch_user(self):
 
@@ -136,14 +140,27 @@ class TwitterApiTest(TestCase):
 
         instances = instance.fetch_statuses(count=30)
 
-        self.assertEqual(len(instances), 30)
-        self.assertEqual(len(instances), Status.objects.filter(author=instance).count())
+        self.assertEqual(instances.count(), 30)
+        self.assertEqual(instances.count(), Status.objects.filter(author=instance).count())
 
+        # test `all` argument
         instances = instance.fetch_statuses(all=True, exclude_replies=True)
 
-        self.assertGreater(len(instances), 3100)
-        self.assertLess(len(instances), 4000)
-        self.assertEqual(len(instances), Status.objects.filter(author=instance).count())
+        self.assertGreater(instances.count(), 3100)
+        self.assertLess(instances.count(), 4000)
+        self.assertEqual(instances.count(), Status.objects.filter(author=instance).count())
+
+        # test `after` argument
+        after = timezone.now() - timedelta(20)
+        instances_after = instance.fetch_statuses(all=True, after=after)
+        self.assertLess(instances_after.count(), instances.count())
+        self.assertEqual(instances_after.filter(created_at__lt=after).count(), 0)
+
+        # test `before` argument
+        before = instances_after.order_by('created_at')[instances_after.count() / 2].created_at
+        instances_before =instance.fetch_statuses(all=True, after=after, before=before)
+        self.assertLess(instances_before.count(), instances_after.count())
+        self.assertEqual(instances_before.filter(created_at__gt=before).count(), 0)
 
     def test_fetch_user_followers(self):
 
@@ -151,10 +168,10 @@ class TwitterApiTest(TestCase):
 
         self.assertEqual(User.objects.count(), 1)
         instances = instance.fetch_followers(all=True)
-        self.assertGreater(len(instances), 870)
-        self.assertLess(len(instances), 2000)
+        self.assertGreater(instances.count(), 870)
+        self.assertLess(instances.count(), 2000)
         self.assertIsInstance(instances[0], User)
-        self.assertEqual(len(instances), User.objects.count() - 1)
+        self.assertEqual(instances.count(), User.objects.count() - 1)
 
     def test_fetch_user_followers_ids(self):
 
@@ -177,8 +194,8 @@ class TwitterApiTest(TestCase):
 
         instances = instance.fetch_retweets()
 
-        self.assertGreaterEqual(len(instances), 6)
-        self.assertEqual(len(instances), Status.objects.count() - 1)
+        self.assertGreaterEqual(instances.count(), 6)
+        self.assertEqual(instances.count(), Status.objects.count() - 1)
 
     def test_get_replies(self):
         """
