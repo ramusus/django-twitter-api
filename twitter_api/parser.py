@@ -13,7 +13,7 @@ IDS_RE = re.compile('data-tweet-id="(\d+)"')
 def get_replies(status):
     "Return all replies ids of tweet"
 
-    ids_list = []
+    replies_ids = set()
 
     url = 'https://twitter.com/i/%s/conversation/%s' % (status.author.screen_name, status.pk)
     ar = AccessToken.objects.get_token('twitter').auth_request
@@ -31,11 +31,11 @@ def get_replies(status):
             response = response['descendants']
 
         ids = IDS_RE.findall(response['items_html'])
-        ids_list += ids
+        [replies_ids.add(id) for id in ids]
 
         if response['has_more_items'] and len(ids):
             params = {'max_position': response['min_position']}
         else:
             break
 
-    return ids_list
+    return list(replies_ids)

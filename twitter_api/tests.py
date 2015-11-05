@@ -216,7 +216,7 @@ class TwitterApiTest(TestCase):
 
         replies = status.fetch_replies()
 
-        self.assertGreater(replies.count(), 50)
+        self.assertGreater(replies.count(), 200)
         self.assertEqual(replies.count(), status.replies_count)
         self.assertEqual(replies.count(), Status.objects.count() - 1)
 
