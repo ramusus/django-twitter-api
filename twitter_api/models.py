@@ -10,12 +10,6 @@ from django.db.models.fields import FieldDoesNotExist
 from django.utils import timezone
 from m2m_history.fields import ManyToManyHistoryField
 
-try:
-    from django.db.models.related import RelatedObject as ForeignObjectRel
-except:
-    # django 1.8 +
-    from django.db.models.fields.related import ForeignObjectRel
-
 from . import fields
 from .api import TwitterError, api_call
 from .decorators import fetch_all
@@ -25,6 +19,12 @@ try:
     from django.db.transaction import atomic
 except ImportError:
     from django.db.transaction import commit_on_success as atomic
+
+try:
+    from django.db.models.related import RelatedObject as ForeignObjectRel
+except:
+    # django 1.8 +
+    from django.db.models.fields.related import ForeignObjectRel
 
 
 __all__ = ['User', 'Status', 'TwitterContentError', 'TwitterModel', 'TwitterManager', 'UserManager']
