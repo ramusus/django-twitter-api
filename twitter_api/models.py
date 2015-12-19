@@ -457,12 +457,12 @@ class User(TwitterBaseModel):
     protected = models.BooleanField(u'Protected', default=False)
     verified = models.BooleanField(u'Verified', default=False)
 
-    profile_background_image_url = models.URLField(max_length=300)
-    profile_background_image_url_https = models.URLField(max_length=300)
+    profile_background_image_url = models.URLField(max_length=300, null=True)
+    profile_background_image_url_https = models.URLField(max_length=300, null=True)
     profile_background_tile = models.BooleanField(default=False)
     profile_background_color = models.CharField(max_length=6)
-    profile_banner_url = models.URLField(max_length=300)
-    profile_image_url = models.URLField(max_length=300)
+    profile_banner_url = models.URLField(max_length=300, null=True)
+    profile_image_url = models.URLField(max_length=300, null=True)
     profile_image_url_https = models.URLField(max_length=300)
     url = models.URLField(max_length=300, null=True)
 
