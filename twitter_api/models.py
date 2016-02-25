@@ -219,22 +219,26 @@ class UserManager(TwitterManager):
     def fetch_followers_for_user(self, user, all=False, count=200, **kwargs):
         # https://dev.twitter.com/docs/api/1.1/get/followers/list
         # in docs default count is 20, but maximum is 200
-        if all:
-            # TODO: make optimization: break cursor iteration after getting already
-            # existing user and switch to ids REST method
-            user._followers_ids = []
-            # user.followers.clear() # this make m2m_history record with count 0 - so its wrong
-            cursor = tweepy.Cursor(user.tweepy._api.followers, id=user.pk, count=count)
-            for instance in cursor.items():
-                instance = self.parse_response_object(instance)
-                instance = self.get_or_create_from_instance(instance)
-                # TODO: NOT USE .add method for users, because of ManyToManyHistoryField
-                # TODO: handle first version in right way - empty time_from field.
-                user._followers_ids += [instance.pk]
-
-            user.followers = user._followers_ids
-        else:
+        if all is False:
             raise NotImplementedError("This method implemented only with argument all=True")
+
+        # TODO: make optimization: break cursor iteration after getting already
+        # existing user and switch to ids REST method
+        ids = []
+        cursor = tweepy.Cursor(user.tweepy._api.followers, id=user.pk, count=count)
+        for instance in cursor.items():
+            instance = self.parse_response_object(instance)
+            instance = self.get_or_create_from_instance(instance)
+            ids += [instance.pk]
+
+        initial = user.followers.versions.count() == 0
+
+        user.followers = ids
+
+        if initial:
+            user.followers.get_queryset_through().update(time_from=None)
+            user.followers.versions.update(added_count=0)
+
         return user.followers.all()
 
     def get_or_create_from_instance(self, instance):
@@ -437,8 +441,6 @@ class TwitterBaseModel(TwitterModel):
 
 
 class User(TwitterBaseModel):
-
-    _followers_ids = []
 
     screen_name = models.CharField(u'Screen name', max_length=50, unique=True)
 
