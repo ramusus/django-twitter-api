@@ -6,7 +6,6 @@ from django.test import TestCase
 from django.utils import six, timezone
 from django.utils.timezone import is_aware
 import mock
-from oauth_tokens.factories import UserCredentialsFactory
 import tweepy
 
 from .api import api_call, TwitterApi, TwitterError

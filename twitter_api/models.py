@@ -38,9 +38,9 @@ class TwitterContentError(Exception):
 
 class TwitterManager(models.Manager):
 
-    '''
+    """
     Twitter Manager for RESTful CRUD operations
-    '''
+    """
 
     def __init__(self, methods=None, remote_pk=None, *args, **kwargs):
         if methods and len(methods.items()) < 1:
@@ -54,9 +54,9 @@ class TwitterManager(models.Manager):
         super(TwitterManager, self).__init__(*args, **kwargs)
 
     def get_by_url(self, url):
-        '''
+        """
         Return object by url
-        '''
+        """
         m = re.findall(r'(?:https?://)?(?:www\.)?twitter\.com/([^/]+)/?', url)
         if not len(m):
             raise ValueError("Url should be started with https://twitter.com/")
@@ -64,9 +64,9 @@ class TwitterManager(models.Manager):
         return self.get_by_slug(m[0])
 
     def get_by_slug(self, slug):
-        '''
+        """
         Return object by slug
-        '''
+        """
         # TODO: change to self.get method
         return self.model.remote.fetch(slug)
 
@@ -98,9 +98,9 @@ class TwitterManager(models.Manager):
         return api_call(method, *args, **kwargs)
 
     def fetch(self, *args, **kwargs):
-        '''
+        """
         Retrieve and save object to local DB
-        '''
+        """
         result = self.get(*args, **kwargs)
         if isinstance(result, collections.Iterable):
             return self.filter(pk__in=[self.get_or_create_from_instance(instance).pk for instance in result])
@@ -108,9 +108,9 @@ class TwitterManager(models.Manager):
             return self.get_or_create_from_instance(result)
 
     def get(self, *args, **kwargs):
-        '''
+        """
         Retrieve objects from remote server
-        '''
+        """
         method = kwargs.pop('method', 'get')
         extra_fields = kwargs.pop('extra_fields', {})
         extra_fields['fetched'] = timezone.now()
@@ -157,9 +157,9 @@ class TwitterManager(models.Manager):
 
 class TwitterTimelineManager(TwitterManager):
 
-    '''
+    """
     Manager class, child of OdnoklassnikiManager for fetching objects with arguments `after`, `before`
-    '''
+    """
     timeline_cut_fieldname = 'created_at'
     timeline_force_ordering = True
 
@@ -168,11 +168,11 @@ class TwitterTimelineManager(TwitterManager):
 
     @atomic
     def get(self, *args, **kwargs):
-        '''
+        """
         Retrieve objects and return result list with respect to parameters:
          * 'after' - excluding all items before.
          * 'before' - excluding all items after.
-        '''
+        """
         after = kwargs.pop('after', None)
         before = kwargs.pop('before', None)
 
@@ -195,11 +195,8 @@ class TwitterTimelineManager(TwitterManager):
 
             if timeline_date and isinstance(timeline_date, datetime):
 
-                try:
-                    if after and after > timeline_date:
-                        break
-                except:
-                    import ipdb; ipdb.set_trace()
+                if after and after > timeline_date:
+                    break
 
                 if before and before < timeline_date:
                     continue
@@ -305,9 +302,9 @@ class TwitterModel(models.Model):
         self._external_links_to_add = []
 
     def save(self, *args, **kwargs):
-        '''
+        """
         Save all related instances before or after current instance
-        '''
+        """
         for field, instance in self._foreignkeys_pre_save:
             instance = instance.__class__.remote.get_or_create_from_instance(instance)
             setattr(self, field, instance)
@@ -333,16 +330,16 @@ class TwitterModel(models.Model):
         self._external_links_to_add = []
 
     def _substitute(self, old_instance):
-        '''
+        """
         Substitute new user with old one while updating in method Manager.get_or_create_from_instance()
         Can be overrided in child models
-        '''
+        """
         self.pk = old_instance.pk
 
     def parse(self):
-        '''
+        """
         Parse API response and define fields with values
-        '''
+        """
         for key, value in self._response.items():
             if key == '_api':
                 continue
