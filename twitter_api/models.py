@@ -228,7 +228,7 @@ class UserManager(TwitterManager):
             # TODO: make optimization: break cursor iteration after getting already
             # existing user and switch to ids REST method
             self._user_ids = []
-            user.followers.clear()
+            # user.followers.clear() # this make m2m_history record with count 0 - so its wrong
             cursor = tweepy.Cursor(user.tweepy._api.followers, id=user.pk, count=count)
             for instance in cursor.items():
                 instance = self.parse_response_object(instance)
