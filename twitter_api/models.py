@@ -211,8 +211,6 @@ class TwitterTimelineManager(TwitterManager):
 
 class UserManager(TwitterManager):
 
-    _user_ids = []
-
     def get_followers_ids_for_user(self, user, all=False, count=5000, **kwargs):
         # https://dev.twitter.com/docs/api/1.1/get/followers/ids
         if all:
@@ -227,7 +225,7 @@ class UserManager(TwitterManager):
         if all:
             # TODO: make optimization: break cursor iteration after getting already
             # existing user and switch to ids REST method
-            self._user_ids = []
+            user._followers_ids = []
             # user.followers.clear() # this make m2m_history record with count 0 - so its wrong
             cursor = tweepy.Cursor(user.tweepy._api.followers, id=user.pk, count=count)
             for instance in cursor.items():
@@ -235,9 +233,9 @@ class UserManager(TwitterManager):
                 instance = self.get_or_create_from_instance(instance)
                 # TODO: NOT USE .add method for users, because of ManyToManyHistoryField
                 # TODO: handle first version in right way - empty time_from field.
-                self._user_ids += [instance.pk]
+                user._followers_ids += [instance.pk]
 
-            user.followers = self._user_ids
+            user.followers = user._followers_ids
         else:
             raise NotImplementedError("This method implemented only with argument all=True")
         return user.followers.all()
@@ -442,6 +440,8 @@ class TwitterBaseModel(TwitterModel):
 
 
 class User(TwitterBaseModel):
+
+    _followers_ids = []
 
     screen_name = models.CharField(u'Screen name', max_length=50, unique=True)
 
