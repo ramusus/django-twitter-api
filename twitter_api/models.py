@@ -7,7 +7,6 @@ from datetime import datetime
 import tweepy
 from django.db import models
 from django.db.models.fields import FieldDoesNotExist
-from django.conf import settings
 from django.utils import timezone
 from m2m_history.fields import ManyToManyHistoryField
 
@@ -26,12 +25,6 @@ try:
 except:
     # django 1.8 +
     from django.db.models.fields.related import ForeignObjectRel
-
-if 'field_history' in settings.INSTALLED_APPS:
-    from field_history.tracker import FieldHistoryTracker
-    using_field_history = True
-else:
-    using_field_history = False
 
 __all__ = ['User', 'Status', 'TwitterContentError', 'TwitterModel', 'TwitterManager', 'UserManager']
 
@@ -494,10 +487,6 @@ class User(TwitterBaseModel):
     remote = UserManager(methods={
         'get': 'get_user',
     })
-
-    if using_field_history:
-        field_history = FieldHistoryTracker(['followers_count', 'favorites_count', 'friends_count', 'listed_count',
-                                             'statuses_count'])
 
     def __unicode__(self):
         return self.name
